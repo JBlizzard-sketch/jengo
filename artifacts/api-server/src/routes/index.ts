@@ -9,10 +9,14 @@ import { visitorsRouter } from "./visitors";
 import { paymentsRouter } from "./payments";
 import { contractorsRouter, jobsRouter } from "./contractors";
 import { dashboardRouter } from "./dashboard";
+import { authRouter } from "./auth";
+import { portalRouter } from "./portal";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/auth", authRouter);
+router.use("/portal", portalRouter);
 router.use("/buildings", buildingsRouter);
 router.use("/", unitsRouter);
 router.use("/residents", residentsRouter);

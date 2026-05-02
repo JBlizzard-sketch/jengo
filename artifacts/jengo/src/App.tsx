@@ -5,6 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
 import { MainLayout } from "@/components/layout/main-layout";
+import { PortalLayout } from "@/components/layout/portal-layout";
+import { ResidentAuthProvider, useResidentAuth } from "@/contexts/resident-auth";
+
 import Dashboard from "@/pages/dashboard";
 import Buildings from "@/pages/buildings";
 import BuildingDetail from "@/pages/buildings/[id]";
@@ -16,25 +19,82 @@ import Visitors from "@/pages/visitors";
 import Payments from "@/pages/payments";
 import Contractors from "@/pages/contractors";
 
+import PortalLogin from "@/pages/portal/login";
+import PortalDashboard from "@/pages/portal/dashboard";
+import PortalIssues from "@/pages/portal/issues";
+import PortalPayments from "@/pages/portal/payments";
+import PortalAnnouncements from "@/pages/portal/announcements";
+import PortalVisitors from "@/pages/portal/visitors";
+import { useLocation } from "wouter";
+import { useEffect } from "react";
+
 const queryClient = new QueryClient();
+
+function PortalGuard({ component: Component }: { component: React.ComponentType }) {
+  const { resident, isLoading } = useResidentAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !resident) {
+      setLocation("/portal");
+    }
+  }, [resident, isLoading, setLocation]);
+
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center text-muted-foreground">Loading...</div>;
+  }
+
+  if (!resident) return null;
+
+  return (
+    <PortalLayout>
+      <Component />
+    </PortalLayout>
+  );
+}
 
 function Router() {
   return (
-    <MainLayout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/buildings" component={Buildings} />
-        <Route path="/buildings/:id" component={BuildingDetail} />
-        <Route path="/issues/new" component={NewIssue} />
-        <Route path="/issues/:id" component={IssueDetail} />
-        <Route path="/issues" component={Issues} />
-        <Route path="/announcements" component={Announcements} />
-        <Route path="/visitors" component={Visitors} />
-        <Route path="/payments" component={Payments} />
-        <Route path="/contractors" component={Contractors} />
-        <Route component={NotFound} />
-      </Switch>
-    </MainLayout>
+    <Switch>
+      {/* Resident Portal routes */}
+      <Route path="/portal" component={PortalLogin} />
+      <Route path="/portal/dashboard">
+        {() => <PortalGuard component={PortalDashboard} />}
+      </Route>
+      <Route path="/portal/issues">
+        {() => <PortalGuard component={PortalIssues} />}
+      </Route>
+      <Route path="/portal/payments">
+        {() => <PortalGuard component={PortalPayments} />}
+      </Route>
+      <Route path="/portal/announcements">
+        {() => <PortalGuard component={PortalAnnouncements} />}
+      </Route>
+      <Route path="/portal/visitors">
+        {() => <PortalGuard component={PortalVisitors} />}
+      </Route>
+
+      {/* Management dashboard routes */}
+      <Route>
+        {() => (
+          <MainLayout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/buildings" component={Buildings} />
+              <Route path="/buildings/:id" component={BuildingDetail} />
+              <Route path="/issues/new" component={NewIssue} />
+              <Route path="/issues/:id" component={IssueDetail} />
+              <Route path="/issues" component={Issues} />
+              <Route path="/announcements" component={Announcements} />
+              <Route path="/visitors" component={Visitors} />
+              <Route path="/payments" component={Payments} />
+              <Route path="/contractors" component={Contractors} />
+              <Route component={NotFound} />
+            </Switch>
+          </MainLayout>
+        )}
+      </Route>
+    </Switch>
   );
 }
 
@@ -42,9 +102,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
+        <ResidentAuthProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+        </ResidentAuthProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
