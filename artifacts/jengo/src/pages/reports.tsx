@@ -1,15 +1,17 @@
-import { useState } from "react";
-import { useListBuildings, getListBuildingsQueryKey } from "@workspace/api-client-react";
+import { useState, useMemo } from "react";
+import { useListBuildings, useListResidents, getListBuildingsQueryKey, getListResidentsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
 } from "recharts";
-import { BarChart2, Download, TrendingUp, AlertTriangle, Clock, AlertCircle, CheckCircle } from "lucide-react";
+import { BarChart2, Download, TrendingUp, AlertTriangle, Clock, AlertCircle, CheckCircle, CalendarClock, Search } from "lucide-react";
+import { useLocation } from "wouter";
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [{ value: "all", label: "All Time" }];
@@ -71,8 +73,76 @@ function exportReportCSV(rows: any[], month: string) {
   URL.revokeObjectURL(url);
 }
 
+function exportLeaseCSV(rows: any[], buildingMap: Record<number, string>) {
+  const header = ["Resident", "Phone", "Building", "Lease End Date", "Days Remaining", "Status"];
+  const data = rows.map(r => {
+    const days = (r as any).leaseEndDate ? Math.round((new Date((r as any).leaseEndDate).getTime() - Date.now()) / 86400000) : null;
+    return [
+      `${r.firstName} ${r.lastName}`,
+      r.phone ?? "",
+      buildingMap[r.buildingId] ?? "",
+      (r as any).leaseEndDate ?? "",
+      days !== null ? String(days) : "No date set",
+      days === null ? "No date" : days < 0 ? "Expired" : days <= 30 ? "Expiring soon" : days <= 60 ? "Expiring" : "Active",
+    ];
+  });
+  const csv = [header, ...data].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `jengo-leases-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function Reports() {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [leaseSearch, setLeaseSearch] = useState("");
+  const [leaseFilter, setLeaseFilter] = useState("all");
+  const [, setLocation] = useLocation();
+
+  const { data: allResidents } = useListResidents(undefined, {
+    query: { queryKey: getListResidentsQueryKey() }
+  });
+  const { data: allBuildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
+  const buildingMap: Record<number, string> = Object.fromEntries((allBuildings ?? []).map(b => [b.id, b.name]));
+
+  const leaseRows = useMemo(() => {
+    const active = (allResidents ?? []).filter(r => r.status === "active");
+    const filtered = active.filter(r => {
+      const led = (r as any).leaseEndDate;
+      if (leaseFilter === "no_date") return !led;
+      if (!led) return false;
+      const days = Math.round((new Date(led).getTime() - Date.now()) / 86400000);
+      if (leaseFilter === "expired") return days < 0;
+      if (leaseFilter === "30") return days >= 0 && days <= 30;
+      if (leaseFilter === "60") return days >= 0 && days <= 60;
+      if (leaseFilter === "90") return days >= 0 && days <= 90;
+      return true;
+    }).filter(r => {
+      if (!leaseSearch.trim()) return true;
+      const q = leaseSearch.toLowerCase();
+      return `${r.firstName} ${r.lastName}`.toLowerCase().includes(q) || r.phone?.includes(q);
+    });
+    return filtered.sort((a, b) => {
+      const da = (a as any).leaseEndDate;
+      const db = (b as any).leaseEndDate;
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return new Date(da).getTime() - new Date(db).getTime();
+    });
+  }, [allResidents, leaseFilter, leaseSearch]);
+
+  const leaseSummary = useMemo(() => {
+    const active = (allResidents ?? []).filter(r => r.status === "active");
+    const withDate = active.filter(r => (r as any).leaseEndDate);
+    const expired = withDate.filter(r => Math.round((new Date((r as any).leaseEndDate).getTime() - Date.now()) / 86400000) < 0);
+    const exp30 = withDate.filter(r => { const d = Math.round((new Date((r as any).leaseEndDate).getTime() - Date.now()) / 86400000); return d >= 0 && d <= 30; });
+    const exp60 = withDate.filter(r => { const d = Math.round((new Date((r as any).leaseEndDate).getTime() - Date.now()) / 86400000); return d >= 0 && d <= 60; });
+    return { total: active.length, withDate: withDate.length, expired: expired.length, exp30: exp30.length, exp60: exp60.length };
+  }, [allResidents]);
 
   const { data: report, isLoading } = useQuery({
     queryKey: ["payments-report", month],
@@ -130,6 +200,14 @@ export default function Reports() {
         <TabsList>
           <TabsTrigger value="collections" data-testid="tab-collections">Collections</TabsTrigger>
           <TabsTrigger value="issues" data-testid="tab-issues">Issues</TabsTrigger>
+          <TabsTrigger value="leases" data-testid="tab-leases">
+            Leases
+            {leaseSummary.expired + leaseSummary.exp30 > 0 && (
+              <span className="ml-1.5 text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                {leaseSummary.expired + leaseSummary.exp30}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* ─── Collections Tab ─── */}
@@ -300,6 +378,165 @@ export default function Reports() {
                         </td>
                       </tr>
                     </tfoot>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ─── Leases Tab ─── */}
+        <TabsContent value="leases" className="mt-4 space-y-6">
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="border-red-200 bg-red-50/40">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-red-600" />
+                  <p className="text-sm text-muted-foreground">Expired</p>
+                </div>
+                <p className="text-2xl font-bold text-red-700">{leaseSummary.expired}</p>
+                <p className="text-xs text-red-600 mt-0.5">past end date</p>
+              </CardContent>
+            </Card>
+            <Card className="border-amber-200 bg-amber-50/40">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <CalendarClock className="w-4 h-4 text-amber-600" />
+                  <p className="text-sm text-muted-foreground">In 30 days</p>
+                </div>
+                <p className="text-2xl font-bold text-amber-700">{leaseSummary.exp30}</p>
+                <p className="text-xs text-amber-600 mt-0.5">need renewal soon</p>
+              </CardContent>
+            </Card>
+            <Card className="border-yellow-200 bg-yellow-50/40">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <CalendarClock className="w-4 h-4 text-yellow-600" />
+                  <p className="text-sm text-muted-foreground">In 60 days</p>
+                </div>
+                <p className="text-2xl font-bold text-yellow-700">{leaseSummary.exp60}</p>
+                <p className="text-xs text-yellow-600 mt-0.5">plan ahead</p>
+              </CardContent>
+            </Card>
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle className="w-4 h-4 text-primary" />
+                  <p className="text-sm text-muted-foreground">Tracked</p>
+                </div>
+                <p className="text-2xl font-bold text-primary">{leaseSummary.withDate}/{leaseSummary.total}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">active residents</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filters + Export */}
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search resident..."
+                  value={leaseSearch}
+                  onChange={e => setLeaseSearch(e.target.value)}
+                  className="pl-8 w-48 h-9"
+                  data-testid="input-lease-search"
+                />
+              </div>
+              <Select value={leaseFilter} onValueChange={setLeaseFilter}>
+                <SelectTrigger className="w-48" data-testid="select-lease-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All with lease dates</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                  <SelectItem value="30">Expiring in 30 days</SelectItem>
+                  <SelectItem value="60">Expiring in 60 days</SelectItem>
+                  <SelectItem value="90">Expiring in 90 days</SelectItem>
+                  <SelectItem value="no_date">No date set</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-muted-foreground">{leaseRows.length} resident{leaseRows.length !== 1 ? "s" : ""}</span>
+            </div>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => exportLeaseCSV(leaseRows, buildingMap)}
+              disabled={leaseRows.length === 0}
+              data-testid="button-export-leases"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
+
+          {/* Lease table */}
+          <Card>
+            <CardContent className="p-0">
+              {leaseRows.length === 0 ? (
+                <div className="p-12 text-center">
+                  <CalendarClock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">
+                    {leaseFilter === "no_date"
+                      ? "All active residents have lease dates set"
+                      : "No residents match this filter"}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="text-left p-4 font-medium text-muted-foreground">Resident</th>
+                        <th className="text-left p-4 font-medium text-muted-foreground">Building</th>
+                        <th className="text-left p-4 font-medium text-muted-foreground">Phone</th>
+                        <th className="text-left p-4 font-medium text-muted-foreground">Lease End Date</th>
+                        <th className="text-right p-4 font-medium text-muted-foreground">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {leaseRows.map(r => {
+                        const led = (r as any).leaseEndDate;
+                        const days = led ? Math.round((new Date(led).getTime() - Date.now()) / 86400000) : null;
+                        const expired = days !== null && days < 0;
+                        const urgent = days !== null && days >= 0 && days <= 30;
+                        const soon = days !== null && days > 30 && days <= 60;
+                        return (
+                          <tr
+                            key={r.id}
+                            className="hover:bg-muted/20 transition-colors cursor-pointer"
+                            onClick={() => setLocation(`/residents/${r.id}`)}
+                            data-testid={`row-lease-${r.id}`}
+                          >
+                            <td className="p-4">
+                              <p className="font-medium text-foreground">{r.firstName} {r.lastName}</p>
+                              {r.isOwner && <span className="text-[10px] text-primary bg-primary/10 px-1 rounded">Owner</span>}
+                            </td>
+                            <td className="p-4 text-muted-foreground">{buildingMap[r.buildingId] ?? `Bldg ${r.buildingId}`}</td>
+                            <td className="p-4 text-muted-foreground">{r.phone}</td>
+                            <td className="p-4">
+                              {led
+                                ? new Date(led).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+                                : <span className="italic text-muted-foreground">Not set</span>}
+                            </td>
+                            <td className="p-4 text-right">
+                              {days === null ? (
+                                <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground">No date</span>
+                              ) : expired ? (
+                                <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-medium">Expired {Math.abs(days)}d ago</span>
+                              ) : urgent ? (
+                                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">{days}d left</span>
+                              ) : soon ? (
+                                <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 font-medium">{days}d left</span>
+                              ) : (
+                                <span className="text-xs px-2 py-0.5 rounded bg-green-50 text-green-700">{days}d left</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
                   </table>
                 </div>
               )}

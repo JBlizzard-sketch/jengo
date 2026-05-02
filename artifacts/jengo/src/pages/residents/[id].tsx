@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight
+  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight, CalendarClock, RotateCcw
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -259,6 +259,52 @@ export default function ResidentDetail() {
                 <span className="text-muted-foreground">Move-in</span>
                 <span className="font-medium">{new Date(resident.moveInDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</span>
               </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground flex items-center gap-1"><CalendarClock className="w-3 h-3" />Lease End</span>
+              {(resident as any).leaseEndDate ? (() => {
+                const days = Math.round((new Date((resident as any).leaseEndDate).getTime() - Date.now()) / 86400000);
+                const expired = days < 0;
+                const urgent = days <= 30;
+                return (
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${expired ? "bg-red-100 text-red-700" : urgent ? "bg-amber-100 text-amber-700" : "bg-green-50 text-green-700"}`}>
+                      {expired ? `Expired ${Math.abs(days)}d ago` : days === 0 ? "Today!" : `${days}d left`}
+                    </span>
+                    <span className="font-medium text-sm">{new Date((resident as any).leaseEndDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  </div>
+                );
+              })() : (
+                <span className="text-muted-foreground text-sm italic">Not set</span>
+              )}
+            </div>
+            {resident.status === "active" && (
+              <div className="flex gap-2 pt-1">
+                <EditableField
+                  label="Update Lease End Date"
+                  value={(resident as any).leaseEndDate ?? ""}
+                  type="date"
+                  icon={<CalendarClock className="w-3.5 h-3.5 text-muted-foreground" />}
+                  onSave={v => patch({ leaseEndDate: v || null })}
+                />
+              </div>
+            )}
+            {resident.status === "active" && (resident as any).leaseEndDate && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full gap-2 text-primary border-primary/30 hover:bg-primary/5 mt-1"
+                onClick={() => {
+                  const current = new Date((resident as any).leaseEndDate);
+                  const renewed = new Date(current);
+                  renewed.setFullYear(renewed.getFullYear() + 1);
+                  patch({ leaseEndDate: renewed.toISOString().slice(0, 10) });
+                }}
+                disabled={updateResident.isPending}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Renew Lease (+1 Year)
+              </Button>
             )}
             {(resident as any).moveOutDate && (
               <div className="flex items-center justify-between">
