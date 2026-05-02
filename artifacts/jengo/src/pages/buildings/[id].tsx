@@ -7,14 +7,14 @@ import {
   getGetBuildingQueryKey, getListUnitsQueryKey, getListResidentsQueryKey,
   getListIssuesQueryKey, getGetPaymentsSummaryQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Building, Users, Phone, Home, UserPlus, Pencil, Plus, ChevronRight } from "lucide-react";
+import { ArrowLeft, Building, Users, Phone, Home, UserPlus, Pencil, Plus, ChevronRight, TrendingUp, CheckCircle2 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   occupied: "bg-green-100 text-green-700",
@@ -333,6 +333,189 @@ function AddResidentDialog({ buildingId, units, onClose }: { buildingId: number;
   );
 }
 
+function RentReviewDialog({
+  building,
+  units,
+  onClose,
+}: {
+  building: any;
+  units: any[];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [type, setType] = useState<"percent" | "fixed">("percent");
+  const [value, setValue] = useState("");
+  const [updateServiceCharge, setUpdateServiceCharge] = useState(false);
+  const [step, setStep] = useState<"configure" | "preview" | "done">("configure");
+  const [result, setResult] = useState<any>(null);
+
+  const numValue = Number(value) || 0;
+  const preview = units.map(u => {
+    const oldRent = Number(u.monthlyRent ?? 0);
+    const newRent = type === "percent"
+      ? Math.round(oldRent * (1 + numValue / 100))
+      : Math.round(oldRent + numValue);
+    return { ...u, oldRent, newRent, diff: newRent - oldRent };
+  });
+  const totalBefore = preview.reduce((s, u) => s + u.oldRent, 0);
+  const totalAfter = preview.reduce((s, u) => s + u.newRent, 0);
+
+  const confirm = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/buildings/${building.id}/rent-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, value: numValue, updateServiceCharge }),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.error ?? "Failed to apply rent review");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      qc.invalidateQueries({ queryKey: getListUnitsQueryKey(building.id) });
+      qc.invalidateQueries({ queryKey: getGetBuildingQueryKey(building.id) });
+      setStep("done");
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            Annual Rent Review — {building.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === "configure" && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Review Type</label>
+              <Select value={type} onValueChange={v => setType(v as "percent" | "fixed")}>
+                <SelectTrigger data-testid="select-review-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percent">Percentage increase (%)</SelectItem>
+                  <SelectItem value="fixed">Fixed amount (KES)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">
+                {type === "percent" ? "Percentage Increase" : "Fixed Increase (KES)"}
+              </label>
+              <Input
+                type="number"
+                min="0"
+                step={type === "percent" ? "0.5" : "500"}
+                placeholder={type === "percent" ? "e.g. 7.5" : "e.g. 2000"}
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                data-testid="input-review-value"
+              />
+              {type === "percent" && (
+                <div className="flex gap-2 mt-2">
+                  {[5, 7, 7.5, 10].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setValue(String(p))}
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${value === String(p) ? "border-primary bg-primary/10 text-primary font-medium" : "border-border text-muted-foreground hover:border-primary/50"}`}
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={updateServiceCharge}
+                onChange={e => setUpdateServiceCharge(e.target.checked)}
+                className="rounded"
+                data-testid="checkbox-update-service-charge"
+              />
+              Also update building service charge (use avg new rent)
+            </label>
+            <Button
+              className="w-full"
+              disabled={!numValue || numValue <= 0}
+              onClick={() => setStep("preview")}
+              data-testid="button-preview"
+            >
+              Preview Changes ({units.length} unit{units.length !== 1 ? "s" : ""})
+            </Button>
+          </div>
+        )}
+
+        {step === "preview" && (
+          <div className="space-y-4 overflow-y-auto flex-1 flex flex-col">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-muted/40 rounded-lg text-center">
+                <p className="text-xs text-muted-foreground mb-1">Monthly Before</p>
+                <p className="font-semibold text-sm">KES {totalBefore.toLocaleString()}</p>
+              </div>
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+                <p className="text-xs text-green-700 mb-1">Monthly After</p>
+                <p className="font-semibold text-sm text-green-700">KES {totalAfter.toLocaleString()}</p>
+                <p className="text-[11px] text-green-600">+KES {(totalAfter - totalBefore).toLocaleString()}/mo</p>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto max-h-52 border rounded-lg divide-y divide-border text-sm">
+              {preview.map(u => (
+                <div key={u.id} className="flex items-center justify-between p-3" data-testid={`preview-unit-${u.id}`}>
+                  <span className="font-medium text-foreground">Unit {u.unitNumber}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {u.oldRent > 0 ? `KES ${u.oldRent.toLocaleString()}` : "—"}
+                    {" "}→{" "}
+                    <span className="text-green-700 font-semibold">KES {u.newRent.toLocaleString()}</span>
+                    {u.oldRent > 0 && <span className="text-green-600 ml-1">(+{u.diff.toLocaleString()})</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {confirm.error && (
+              <p className="text-sm text-destructive">{(confirm.error as Error).message}</p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setStep("configure")}>Back</Button>
+              <Button
+                className="flex-1"
+                onClick={() => confirm.mutate()}
+                disabled={confirm.isPending}
+                data-testid="button-confirm-review"
+              >
+                {confirm.isPending ? "Applying..." : `Apply to ${units.length} Units`}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "done" && result && (
+          <div className="py-4 space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+              <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
+              <p className="font-semibold text-green-800">Rent Review Applied!</p>
+              <p className="text-sm text-green-700 mt-1">{result.updated} units updated in {result.building}</p>
+              <p className="text-xs text-green-600 mt-0.5">
+                Monthly revenue: KES {Number(result.totalBefore).toLocaleString()} → KES {Number(result.totalAfter).toLocaleString()}
+              </p>
+              {type === "percent" && (
+                <p className="text-xs text-green-600">({result.value}% increase)</p>
+              )}
+            </div>
+            <Button className="w-full" onClick={onClose}>Done</Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function BuildingDetail() {
   const [, params] = useRoute("/buildings/:id");
   const [, setLocation] = useLocation();
@@ -340,6 +523,7 @@ export default function BuildingDetail() {
   const [addingResident, setAddingResident] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState(false);
   const [addingUnit, setAddingUnit] = useState(false);
+  const [rentReviewOpen, setRentReviewOpen] = useState(false);
 
   const { data: building, isLoading } = useGetBuilding(id, {
     query: { queryKey: getGetBuildingQueryKey(id), enabled: !!id },
@@ -396,6 +580,16 @@ export default function BuildingDetail() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+            onClick={() => setRentReviewOpen(true)}
+            data-testid="button-rent-review"
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            Rent Review
+          </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditingBuilding(true)} data-testid="button-edit-building">
             <Pencil className="w-3.5 h-3.5" />
             Edit
@@ -670,6 +864,9 @@ export default function BuildingDetail() {
       )}
       {addingResident && (
         <AddResidentDialog buildingId={id} units={units ?? []} onClose={() => setAddingResident(false)} />
+      )}
+      {rentReviewOpen && (
+        <RentReviewDialog building={building} units={units ?? []} onClose={() => setRentReviewOpen(false)} />
       )}
     </div>
   );

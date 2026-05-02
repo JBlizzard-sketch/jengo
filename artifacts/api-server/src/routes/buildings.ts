@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { buildingsTable, unitsTable, residentsTable, issuesTable, paymentsTable, visitorsTable, jobsTable } from "@workspace/db";
 import { eq, count, sql, and, avg } from "drizzle-orm";
@@ -80,6 +81,52 @@ buildingsRouter.patch("/:id", async (req, res) => {
     ...building,
     serviceChargeAmount: building.serviceChargeAmount ? Number(building.serviceChargeAmount) : null,
     reputationScore: building.reputationScore ? Number(building.reputationScore) : null,
+  });
+});
+
+// POST /api/buildings/:id/rent-review — bulk update all unit rents by % or fixed amount
+buildingsRouter.post("/:id/rent-review", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    type: z.enum(["percent", "fixed"]),
+    value: z.coerce.number().positive(),
+    updateServiceCharge: z.boolean().optional().default(false),
+  }).parse(req.body);
+
+  const [building] = await db.select().from(buildingsTable).where(eq(buildingsTable.id, id));
+  if (!building) { res.status(404).json({ error: "Building not found" }); return; }
+
+  const currentUnits = await db.select().from(unitsTable).where(eq(unitsTable.buildingId, id));
+  if (!currentUnits.length) { res.status(400).json({ error: "No units found in this building" }); return; }
+
+  const preview = currentUnits.map(u => {
+    const oldRent = Number(u.monthlyRent ?? 0);
+    const newRent = body.type === "percent"
+      ? Math.round(oldRent * (1 + body.value / 100))
+      : Math.round(oldRent + body.value);
+    return { id: u.id, unitNumber: u.unitNumber, oldRent, newRent, diff: newRent - oldRent };
+  });
+
+  for (const u of preview) {
+    await db.update(unitsTable).set({ monthlyRent: u.newRent.toString() }).where(eq(unitsTable.id, u.id));
+  }
+
+  if (body.updateServiceCharge) {
+    const avgNewRent = Math.round(preview.reduce((s, u) => s + u.newRent, 0) / preview.length);
+    await db.update(buildingsTable).set({ serviceChargeAmount: avgNewRent.toString() }).where(eq(buildingsTable.id, id));
+  }
+
+  const totalBefore = preview.reduce((s, u) => s + u.oldRent, 0);
+  const totalAfter = preview.reduce((s, u) => s + u.newRent, 0);
+
+  res.json({
+    building: building.name,
+    updated: preview.length,
+    type: body.type,
+    value: body.value,
+    totalBefore,
+    totalAfter,
+    units: preview,
   });
 });
 

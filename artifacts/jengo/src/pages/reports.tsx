@@ -10,8 +10,130 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
 } from "recharts";
-import { BarChart2, Download, TrendingUp, AlertTriangle, Clock, AlertCircle, CheckCircle, CalendarClock, Search } from "lucide-react";
+import { BarChart2, Download, TrendingUp, AlertTriangle, Clock, AlertCircle, CheckCircle, CalendarClock, Search, Printer } from "lucide-react";
 import { useLocation } from "wouter";
+import { printHtml, loadSettings } from "@/lib/print-utils";
+
+function printReport(rows: any[], totals: any, totalRate: number, month: string, issuesReport: any) {
+  const settings = loadSettings();
+  const monthLabel = month === "all"
+    ? "All Time"
+    : new Date(month + "-01").toLocaleDateString("en-KE", { month: "long", year: "numeric" });
+
+  const rateColor = (r: number) => r >= 80 ? "#15803d" : r >= 50 ? "#b45309" : "#b91c1c";
+  const rateBarColor = (r: number) => r >= 80 ? "#22c55e" : r >= 50 ? "#f59e0b" : "#ef4444";
+
+  const buildingRows = rows.map(r => `
+    <tr>
+      <td>
+        <strong>${r.buildingName}</strong>
+        <br/><span style="font-size:11px;color:#888;text-transform:capitalize">${r.neighbourhood.replace("_", " ")}</span>
+      </td>
+      <td style="text-align:right">KES ${r.total.toLocaleString()}<br/><span style="font-size:11px;color:#888">${r.paidCount + r.overdueCount + r.pendingCount} charges</span></td>
+      <td style="text-align:right;color:#15803d;font-weight:600">KES ${r.collected.toLocaleString()}<br/><span style="font-size:11px">${r.paidCount} paid</span></td>
+      <td style="text-align:right;color:#b91c1c">${r.overdue > 0 ? `KES ${r.overdue.toLocaleString()}` : "—"}<br/><span style="font-size:11px">${r.overdueCount > 0 ? `${r.overdueCount} overdue` : ""}</span></td>
+      <td style="text-align:right;color:#b45309">${r.pending > 0 ? `KES ${r.pending.toLocaleString()}` : "—"}</td>
+      <td style="text-align:right">
+        <span style="font-size:16px;font-weight:700;color:${rateColor(r.collectionRate)}">${r.collectionRate}%</span>
+        <br/><div style="height:6px;background:#e5e7eb;border-radius:3px;margin-top:4px;width:60px;margin-left:auto">
+          <div style="height:6px;background:${rateBarColor(r.collectionRate)};border-radius:3px;width:${r.collectionRate}%"></div>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+
+  const issuesSummary = issuesReport ? `
+    <div class="section">
+      <h2>Issues Summary</h2>
+      <table>
+        <thead><tr>
+          <th>Building</th><th style="text-align:right">Open</th><th style="text-align:right">In Progress</th><th style="text-align:right">Resolved</th>
+        </tr></thead>
+        <tbody>
+          ${(issuesReport.byBuilding ?? []).map((b: any) => `
+            <tr>
+              <td><strong>${b.buildingName}</strong></td>
+              <td style="text-align:right;color:#b91c1c;font-weight:600">${b.open}</td>
+              <td style="text-align:right;color:#b45309;font-weight:600">${b.inProgress}</td>
+              <td style="text-align:right;color:#15803d;font-weight:600">${b.resolved + b.closed}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  ` : "";
+
+  const html = `
+    <div class="header">
+      <div>
+        <div class="brand">${settings.companyName}</div>
+        <div style="font-size:12px;color:#888;margin-top:2px">${settings.companyAddress}</div>
+        <h1 style="margin-top:8px">Monthly Collections Report</h1>
+        <p style="color:#666;font-size:13px">Period: ${monthLabel}</p>
+      </div>
+      <div class="meta">
+        <div style="font-size:11px;color:#888">Printed</div>
+        <div style="font-size:12px;font-weight:600">${new Date().toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}</div>
+        <div style="font-size:11px;color:#888;margin-top:8px">${settings.companyPhone}</div>
+        <div style="font-size:11px;color:#888">${settings.companyEmail}</div>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-box">
+        <div class="label">Total Charged</div>
+        <div class="value-lg">KES ${totals.total.toLocaleString()}</div>
+        <div style="font-size:11px;color:#888">${totals.paidCount + totals.overdueCount + totals.pendingCount} charges</div>
+      </div>
+      <div class="summary-box" style="border-color:#bbf7d0">
+        <div class="label" style="color:#15803d">Collected</div>
+        <div class="value-lg" style="color:#15803d">KES ${totals.collected.toLocaleString()}</div>
+        <div style="font-size:11px;color:#15803d">${totals.paidCount} payments</div>
+      </div>
+      <div class="summary-box" style="border-color:#fecaca">
+        <div class="label" style="color:#b91c1c">Overdue</div>
+        <div class="value-lg" style="color:#b91c1c">KES ${totals.overdue.toLocaleString()}</div>
+        <div style="font-size:11px;color:#b91c1c">${totals.overdueCount} overdue</div>
+      </div>
+      <div class="summary-box" style="border-color:#dbeafe">
+        <div class="label" style="color:#1d4ed8">Collection Rate</div>
+        <div class="value-lg" style="color:${rateColor(totalRate)}">${totalRate}%</div>
+        <div style="font-size:11px;color:#888">platform-wide</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Building Breakdown — ${monthLabel}</h2>
+      <table>
+        <thead><tr>
+          <th>Building</th>
+          <th style="text-align:right">Total Charged</th>
+          <th style="text-align:right">Collected</th>
+          <th style="text-align:right">Overdue</th>
+          <th style="text-align:right">Pending</th>
+          <th style="text-align:right">Rate</th>
+        </tr></thead>
+        <tbody>${buildingRows}</tbody>
+        <tfoot><tr>
+          <td><strong>Platform Total</strong></td>
+          <td style="text-align:right"><strong>KES ${totals.total.toLocaleString()}</strong></td>
+          <td style="text-align:right;color:#15803d"><strong>KES ${totals.collected.toLocaleString()}</strong></td>
+          <td style="text-align:right;color:#b91c1c"><strong>${totals.overdue > 0 ? `KES ${totals.overdue.toLocaleString()}` : "—"}</strong></td>
+          <td style="text-align:right;color:#b45309"><strong>${totals.pending > 0 ? `KES ${totals.pending.toLocaleString()}` : "—"}</strong></td>
+          <td style="text-align:right"><strong style="color:${rateColor(totalRate)}">${totalRate}%</strong></td>
+        </tr></tfoot>
+      </table>
+    </div>
+
+    ${issuesSummary}
+
+    <div class="footer">
+      <p>Generated by ${settings.companyName} &bull; Jengo Building Management Platform &bull; Confidential</p>
+    </div>
+  `;
+
+  printHtml(html, `Collections Report — ${monthLabel}`);
+}
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [{ value: "all", label: "All Time" }];
@@ -223,16 +345,28 @@ export default function Reports() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              className="gap-2"
-              disabled={!rows.length}
-              onClick={() => exportReportCSV(rows, month)}
-              data-testid="button-export-csv"
-            >
-              <Download className="w-4 h-4" />
-              Export CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={!rows.length}
+                onClick={() => printReport(rows, totals, totalRate, month, issuesReport)}
+                data-testid="button-print-report"
+              >
+                <Printer className="w-4 h-4" />
+                Print Report
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={!rows.length}
+                onClick={() => exportReportCSV(rows, month)}
+                data-testid="button-export-csv"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </Button>
+            </div>
           </div>
 
           {/* Platform totals */}
