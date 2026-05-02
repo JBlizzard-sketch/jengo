@@ -420,9 +420,25 @@ export default function Payments() {
                       </Button>
                     )}
                     {!payment.mpesaRef && (payment.status === "pending" || payment.status === "overdue") && (
-                      <Button size="sm" variant="outline" onClick={() => setRecordingPayment(payment)} data-testid={`button-record-${payment.id}`}>
-                        Record
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => setRecordingPayment(payment)} data-testid={`button-record-${payment.id}`}>
+                          Record
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-muted-foreground hover:text-amber-600 text-xs"
+                          onClick={() => {
+                            updatePayment.mutate(
+                              { id: payment.id, data: { status: "waived" } },
+                              { onSuccess: () => { qc.invalidateQueries({ queryKey: getListPaymentsQueryKey() }); qc.invalidateQueries({ queryKey: getGetPaymentsSummaryQueryKey() }); } }
+                            );
+                          }}
+                          data-testid={`button-waive-${payment.id}`}
+                        >
+                          Waive
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

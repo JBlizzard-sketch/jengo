@@ -65,6 +65,23 @@ All routes under `/api`:
 - `POST /api/auth/logout` — destroy session
 - `GET /api/auth/me` — return current resident session
 
+### Resident Detail Page (Phase 11)
+- **Resident Detail page** (`/residents/:id`) — every resident row in the Residents list is now a clickable card with a chevron (Move Out button stops propagation so it still works). The detail page shows: initials avatar in Jengo orange, name, Active/Pending/Inactive badge, Owner-occupier tag, Move Out button; 3 summary cards (Total Paid in green, Overdue in red when > 0, Open Issues in amber when > 0); Unit & Building info card with clickable deep-links to Unit Ledger and Building Detail; Contact Details card with inline hover-to-edit for phone and email (pencil icon appears on hover, saves via PATCH); full Payment History (status badge, amount, due date, paid date, M-Pesa ref); and open building issues list with links to issue detail.
+
+### Issue SLA & Contractor Job Detail (Phase 10)
+- **Issue SLA tracking** — Issues list now shows age of every issue (e.g. "7h", "2d") with a clock icon. Issues open/in-progress for ≥ 48 hours get a red "SLA" badge on the row. A 5th summary card shows the total SLA breach count (highlighted red when > 0). A "Newest first / Oldest first" toggle lets management surface the oldest unresolved issues instantly.
+- **Contractor Job Detail page** (`/contractors/jobs/:id`) — every job row in the Contractors list is now a clickable card with a chevron. The detail page shows: a 4-step visual progress stepper (Quoted → Approved → In Progress → Completed), building + contractor info cards, dates card (created, scheduled, completed), amounts card (quoted vs final — with inline "Set Final" editing), description, inline-editable completion notes, "Mark [next status]" button, and linked Issue shortcut if the job was created from an issue.
+
+### Unit Ledger & Settings (Phase 9)
+- **Unit Ledger page** (`/buildings/:id/units/:unitId`) — every unit row in building detail is now a clickable link (chevron indicator) leading to a full per-unit view: unit header (number, floor, bedrooms, status, rent), current resident card (name, phone, email, move-in date), 4 financial summary cards (Collected / Overdue / Outstanding / Collection Rate), open issues list for the building, and a complete payment history table with totals row
+- **Settings page** (`/settings`, new sidebar item) — editable company profile (name, phone, email, office address), M-Pesa paybill + account prefix configuration, payment policy (grace period days, late-fee percentage); all saved to localStorage
+- **Add Resident** button added to the global Residents page — opens a dialog to select building → units load dynamically → fill name, phone, email, move-in date, owner toggle; creates the resident without leaving the page
+
+### Operations Tooling (Phase 8)
+- **Collection Reports page** (`/reports` in sidebar) — month selector (last 12 months + All Time), 4 summary cards, per-building table (Total Charged / Collected / Overdue / Pending / Collection Rate) with colour-coded rate, Platform Total footer row, Export CSV button
+- **Mark Overdue button** on Payments page — calls `POST /api/payments/mark-overdue` which bulk-updates all `pending` charges past their due date to `overdue`, then refreshes counts
+- **Create Work Order from Issue** — amber "Work Order" card on Issue Detail page; clicking opens a dialog pre-filled with the issue title, lets management pick a contractor, optionally set quote + scheduled date, and creates a linked job in Contractors
+
 ### Resident Management & Exports (Phase 7)
 - New `/residents` page in sidebar — all residents across every building in one view
 - Search by name, phone, or email; filter by building and status

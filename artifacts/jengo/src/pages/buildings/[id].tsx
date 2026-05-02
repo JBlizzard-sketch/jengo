@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Building, Users, Phone, Home, UserPlus, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, Building, Users, Phone, Home, UserPlus, Pencil, Plus, ChevronRight } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   occupied: "bg-green-100 text-green-700",
@@ -498,7 +498,8 @@ export default function BuildingDetail() {
                   {units.map(unit => (
                     <div
                       key={unit.id}
-                      className="flex items-center justify-between p-4"
+                      className="flex items-center justify-between p-4 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => setLocation(`/buildings/${id}/units/${unit.id}`)}
                       data-testid={`row-unit-${unit.id}`}
                     >
                       <div className="flex items-center gap-3">
@@ -508,7 +509,7 @@ export default function BuildingDetail() {
                         <div>
                           <p className="font-semibold text-foreground">Unit {unit.unitNumber}</p>
                           <p className="text-sm text-muted-foreground">
-                            Floor {unit.floor} · {unit.bedrooms} bed
+                            {unit.floor != null ? `Floor ${unit.floor}` : ""}{unit.floor != null && unit.bedrooms != null ? " · " : ""}{unit.bedrooms != null ? `${unit.bedrooms} bed` : ""}
                           </p>
                         </div>
                       </div>
@@ -521,6 +522,7 @@ export default function BuildingDetail() {
                         >
                           {unit.status}
                         </span>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </div>
                     </div>
                   ))}

@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useLocation } from "wouter";
 import { Plus, Star, Wrench, ChevronRight } from "lucide-react";
 
 const JOB_STATUS_COLORS: Record<string, string> = {
@@ -202,6 +203,7 @@ function CommissionJobDialog({ contractors, buildings }: { contractors: any[]; b
 
 export default function Contractors() {
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const { data: contractors, isLoading: loadingContractors } = useListContractors({ query: { queryKey: getListContractorsQueryKey() } });
   const { data: jobs, isLoading: loadingJobs } = useListJobs(undefined, { query: { queryKey: getListJobsQueryKey() } });
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
@@ -248,7 +250,12 @@ export default function Contractors() {
               ) : (
                 <div className="divide-y divide-border">
                   {jobs.map(job => (
-                    <div key={job.id} className="flex items-center justify-between p-4" data-testid={`row-job-${job.id}`}>
+                    <div
+                      key={job.id}
+                      className="flex items-center justify-between p-4 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => setLocation(`/contractors/jobs/${job.id}`)}
+                      data-testid={`row-job-${job.id}`}
+                    >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-xs px-2 py-0.5 rounded font-medium ${JOB_STATUS_COLORS[job.status]}`}>
@@ -264,12 +271,13 @@ export default function Contractors() {
                         </div>
                         {job.notes && <p className="text-xs text-muted-foreground mt-1 italic">{job.notes}</p>}
                       </div>
-                      <div className="ml-4">
+                      <div className="ml-4 flex items-center gap-2" onClick={e => e.stopPropagation()}>
                         {JOB_STATUS_NEXT[job.status] && (
                           <Button size="sm" variant="outline" onClick={() => advanceJob(job)} disabled={updateJob.isPending} data-testid={`button-advance-${job.id}`}>
                             Mark {JOB_STATUS_NEXT[job.status]?.replace("_", " ")}
                           </Button>
                         )}
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </div>
                     </div>
                   ))}

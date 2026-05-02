@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import {
-  useListResidents, useListBuildings, useUpdateResident,
-  getListResidentsQueryKey, getListBuildingsQueryKey,
+  useListResidents, useListBuildings, useListUnits, useUpdateResident, useCreateResident,
+  getListResidentsQueryKey, getListBuildingsQueryKey, getListUnitsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Search, Filter, LogOut, Phone, Mail } from "lucide-react";
+import { Users, Search, Filter, LogOut, Phone, Mail, UserPlus, ChevronRight } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   active: "bg-green-100 text-green-700",
@@ -30,7 +31,7 @@ function MoveOutDialog({
 
   const confirm = () => {
     updateResident.mutate(
-      { id: resident.id, data: { status: "inactive", moveOutDate } },
+      { id: resident.id, data: { status: "inactive", moveOutDate } as any },
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getListResidentsQueryKey() });
@@ -70,11 +71,115 @@ function MoveOutDialog({
   );
 }
 
+function AddResidentDialog({ buildings, onClose }: { buildings: any[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const createResident = useCreateResident();
+  const [buildingId, setBuildingId] = useState<string>("");
+  const [form, setForm] = useState({
+    firstName: "", lastName: "", phone: "", email: "",
+    unitId: "", moveInDate: new Date().toISOString().split("T")[0], isOwner: false,
+  });
+
+  const { data: units } = useListUnits(Number(buildingId), {
+    query: { queryKey: getListUnitsQueryKey(Number(buildingId)), enabled: !!buildingId },
+  });
+
+  const set = (k: string, v: string | boolean) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.firstName || !form.lastName || !form.phone || !form.unitId || !buildingId) return;
+    createResident.mutate(
+      {
+        data: {
+          buildingId: Number(buildingId),
+          unitId: Number(form.unitId),
+          firstName: form.firstName,
+          lastName: form.lastName,
+          phone: form.phone,
+          email: form.email || undefined,
+          moveInDate: form.moveInDate || undefined,
+          isOwner: form.isOwner,
+        }
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListResidentsQueryKey() });
+          onClose();
+        }
+      }
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Add Resident</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs font-medium mb-1 block">Building *</label>
+            <Select value={buildingId} onValueChange={v => { setBuildingId(v); set("unitId", ""); }}>
+              <SelectTrigger data-testid="select-building"><SelectValue placeholder="Select building" /></SelectTrigger>
+              <SelectContent>
+                {buildings.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">First Name *</label>
+              <Input placeholder="John" value={form.firstName} onChange={e => set("firstName", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Last Name *</label>
+              <Input placeholder="Doe" value={form.lastName} onChange={e => set("lastName", e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Phone *</label>
+              <Input placeholder="+254712345678" value={form.phone} onChange={e => set("phone", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Email</label>
+              <Input type="email" placeholder="john@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Unit *</label>
+            <Select value={form.unitId} onValueChange={v => set("unitId", v)} disabled={!buildingId}>
+              <SelectTrigger data-testid="select-unit"><SelectValue placeholder={buildingId ? "Select unit" : "Select building first"} /></SelectTrigger>
+              <SelectContent>
+                {(units ?? []).map(u => (
+                  <SelectItem key={u.id} value={String(u.id)}>Unit {u.unitNumber}{u.status === "occupied" ? " (occupied)" : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Move-in Date</label>
+            <Input type="date" value={form.moveInDate} onChange={e => set("moveInDate", e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="checkbox" checked={form.isOwner} onChange={e => set("isOwner", e.target.checked)} className="rounded" />
+            Owner-occupier
+          </label>
+          <Button type="submit" className="w-full" disabled={createResident.isPending || !form.firstName || !form.lastName || !form.phone || !form.unitId || !buildingId}>
+            {createResident.isPending ? "Adding..." : "Add Resident"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Residents() {
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [buildingFilter, setBuildingFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("active");
   const [movingOut, setMovingOut] = useState<any>(null);
+  const [addingResident, setAddingResident] = useState(false);
 
   const { data: residents, isLoading } = useListResidents(undefined, {
     query: { queryKey: getListResidentsQueryKey() },
@@ -98,15 +203,25 @@ export default function Residents() {
 
   const activeCount = (residents ?? []).filter(r => r.status === "active").length;
   const inactiveCount = (residents ?? []).filter(r => r.status === "inactive").length;
-  const pendingCount = (residents ?? []).filter(r => r.status === "pending").length;
+  const pendingCount = (residents ?? []).filter(r => (r.status as string) === "pending").length;
 
   return (
     <div className="space-y-6">
+      {addingResident && (
+        <AddResidentDialog buildings={buildings ?? []} onClose={() => setAddingResident(false)} />
+      )}
+      {movingOut && (
+        <MoveOutDialog resident={movingOut} onClose={() => setMovingOut(null)} />
+      )}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Residents</h1>
           <p className="text-muted-foreground">All residents across your portfolio</p>
         </div>
+        <Button className="gap-2" onClick={() => setAddingResident(true)} data-testid="button-add-resident">
+          <UserPlus className="w-4 h-4" />
+          Add Resident
+        </Button>
       </div>
 
       {/* Summary */}
@@ -204,7 +319,8 @@ export default function Residents() {
               {filtered.map(resident => (
                 <div
                   key={resident.id}
-                  className="flex items-center justify-between p-4"
+                  className="flex items-center justify-between p-4 hover:bg-muted/30 cursor-pointer transition-colors"
+                  onClick={() => setLocation(`/residents/${resident.id}`)}
                   data-testid={`row-resident-${resident.id}`}
                 >
                   <div className="flex-1 min-w-0">
@@ -246,18 +362,21 @@ export default function Residents() {
                       )}
                     </div>
                   </div>
-                  {resident.status === "active" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-muted-foreground hover:text-destructive gap-1.5 flex-shrink-0 ml-4"
-                      onClick={() => setMovingOut(resident)}
-                      data-testid={`button-moveout-${resident.id}`}
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      Move Out
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2 ml-4 shrink-0" onClick={e => e.stopPropagation()}>
+                    {resident.status === "active" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive gap-1.5"
+                        onClick={() => setMovingOut(resident)}
+                        data-testid={`button-moveout-${resident.id}`}
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Move Out
+                      </Button>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -265,9 +384,6 @@ export default function Residents() {
         </CardContent>
       </Card>
 
-      {movingOut && (
-        <MoveOutDialog resident={movingOut} onClose={() => setMovingOut(null)} />
-      )}
     </div>
   );
 }

@@ -162,7 +162,7 @@ export default function IssueDetail() {
               <SelectContent>
                 <SelectItem value="__none__">Unassigned</SelectItem>
                 {contractors?.map(c => (
-                  <SelectItem key={c.id} value={c.name}>{c.name}{c.specialty ? ` — ${c.specialty}` : ""}</SelectItem>
+                  <SelectItem key={c.id} value={c.name}>{c.name}{(c as any).specialty ? ` — ${(c as any).specialty}` : ""}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -250,7 +250,7 @@ export default function IssueDetail() {
                 </SelectTrigger>
                 <SelectContent>
                   {contractors?.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.specialty ? ` — ${c.specialty}` : ""}</SelectItem>
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}{(c as any).specialty ? ` — ${(c as any).specialty}` : ""}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

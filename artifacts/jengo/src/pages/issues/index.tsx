@@ -1,14 +1,26 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListIssues, useGetIssuesSummary,
   getListIssuesQueryKey, getGetIssuesSummaryQueryKey
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Plus, ChevronRight, Filter } from "lucide-react";
+import { AlertCircle, Plus, ChevronRight, Filter, Clock, ArrowUpDown } from "lucide-react";
+
+function issueAgeLabel(createdAt: string): string {
+  const hours = (Date.now() - new Date(createdAt).getTime()) / 3600000;
+  if (hours < 1) return "<1h";
+  if (hours < 24) return `${Math.floor(hours)}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function isSLABreached(issue: { status: string; createdAt: string }): boolean {
+  if (issue.status === "resolved" || issue.status === "closed") return false;
+  const hours = (Date.now() - new Date(issue.createdAt).getTime()) / 3600000;
+  return hours >= 48;
+}
 
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-red-100 text-red-700 border-red-200",
@@ -33,13 +45,14 @@ export default function Issues() {
   const [status, setStatus] = useState<string>("all");
   const [category, setCategory] = useState<string>("all");
   const [priority, setPriority] = useState<string>("all");
+  const [sortOldest, setSortOldest] = useState(false);
 
   const params: Record<string, string> = {};
   if (status !== "all") params.status = status;
   if (category !== "all") params.category = category;
   if (priority !== "all") params.priority = priority;
 
-  const { data: issues, isLoading } = useListIssues(
+  const { data: rawIssues, isLoading } = useListIssues(
     Object.keys(params).length ? params : undefined,
     { query: { queryKey: getListIssuesQueryKey(Object.keys(params).length ? params : undefined) } }
   );
@@ -47,6 +60,17 @@ export default function Issues() {
     undefined,
     { query: { queryKey: getGetIssuesSummaryQueryKey(undefined) } }
   );
+
+  const issues = useMemo(() => {
+    if (!rawIssues) return [];
+    const sorted = [...rawIssues].sort((a, b) => {
+      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return sortOldest ? diff : -diff;
+    });
+    return sorted;
+  }, [rawIssues, sortOldest]);
+
+  const slaBreachCount = useMemo(() => (rawIssues ?? []).filter(isSLABreached).length, [rawIssues]);
 
   return (
     <div className="space-y-6">
@@ -64,14 +88,15 @@ export default function Issues() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: "Open", value: summary?.totalOpen ?? 0, color: "text-red-600" },
           { label: "In Progress", value: summary?.totalInProgress ?? 0, color: "text-amber-600" },
           { label: "Resolved", value: summary?.totalResolved ?? 0, color: "text-green-600" },
           { label: "Avg. Resolution", value: summary?.avgResolutionHours ? `${summary.avgResolutionHours}h` : "—", color: "text-primary" },
+          { label: "SLA Breaches", value: slaBreachCount, color: slaBreachCount > 0 ? "text-red-700" : "text-muted-foreground" },
         ].map(item => (
-          <Card key={item.label}>
+          <Card key={item.label} className={item.label === "SLA Breaches" && slaBreachCount > 0 ? "border-red-200 bg-red-50/40" : ""}>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">{item.label}</p>
               <p className={`text-2xl font-bold mt-1 ${item.color}`}>{item.value}</p>
@@ -121,6 +146,15 @@ export default function Issues() {
             Clear
           </Button>
         )}
+        <Button
+          variant={sortOldest ? "secondary" : "ghost"}
+          size="sm"
+          className="gap-1 ml-auto"
+          onClick={() => setSortOldest(v => !v)}
+        >
+          <ArrowUpDown className="w-3.5 h-3.5" />
+          {sortOldest ? "Oldest first" : "Newest first"}
+        </Button>
       </div>
 
       {/* Issues list */}
@@ -155,9 +189,14 @@ export default function Issues() {
                         <p className="text-xs text-muted-foreground mt-0.5">Assigned to: {issue.assignedTo}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 ml-4">
-                      <p className="text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(issue.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}
+                    <div className="flex items-center gap-2 ml-4 shrink-0">
+                      {isSLABreached(issue) && (
+                        <span className="text-xs px-2 py-0.5 rounded border font-medium bg-red-100 text-red-700 border-red-200 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />SLA
+                        </span>
+                      )}
+                      <p className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                        <Clock className="w-3 h-3" />{issueAgeLabel(issue.createdAt)}
                       </p>
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>

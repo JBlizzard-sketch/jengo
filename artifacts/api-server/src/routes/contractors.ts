@@ -36,6 +36,18 @@ contractorsRouter.get("/:id", async (req, res) => {
   res.json({ ...contractor, rating: contractor.rating ? Number(contractor.rating) : null });
 });
 
+contractorsRouter.patch("/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const updates: Record<string, unknown> = {};
+  if (req.body.rating !== undefined) updates.rating = String(req.body.rating);
+  if (req.body.name !== undefined) updates.name = req.body.name;
+  if (req.body.phone !== undefined) updates.phone = req.body.phone;
+  if (req.body.email !== undefined) updates.email = req.body.email;
+  const [contractor] = await db.update(contractorsTable).set(updates).where(eq(contractorsTable.id, id)).returning();
+  if (!contractor) return res.status(404).json({ message: "Not found" });
+  res.json({ ...contractor, rating: contractor.rating ? Number(contractor.rating) : null });
+});
+
 jobsRouter.get("/", async (req, res) => {
   const query = ListJobsQueryParams.parse(req.query);
   const conditions = [];

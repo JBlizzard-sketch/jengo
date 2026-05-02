@@ -2,6 +2,7 @@ import { useResidentAuth } from "@/contexts/resident-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "wouter";
 import { AlertCircle, CreditCard, Megaphone, Users, Phone, Building, Home, ChevronRight, Pin } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 interface PortalHome {

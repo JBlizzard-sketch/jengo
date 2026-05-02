@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pin, Megaphone, Trash2 } from "lucide-react";
+import { Plus, Pin, Megaphone, Trash2, Search } from "lucide-react";
 
 const CATEGORY_COLORS: Record<string, string> = {
   general: "bg-gray-100 text-gray-600",
@@ -146,6 +146,8 @@ function NewAnnouncementDialog({ buildingId }: { buildingId?: number }) {
 
 export default function Announcements() {
   const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const { data: announcements, isLoading } = useListAnnouncements(
     undefined,
     { query: { queryKey: getListAnnouncementsQueryKey() } }
@@ -168,8 +170,17 @@ export default function Announcements() {
     );
   };
 
-  const pinned = announcements?.filter(a => a.isPinned) ?? [];
-  const unpinned = announcements?.filter(a => !a.isPinned) ?? [];
+  const filtered = (announcements ?? []).filter(a => {
+    if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!a.title.toLowerCase().includes(q) && !a.content.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const pinned = filtered.filter(a => a.isPinned);
+  const unpinned = filtered.filter(a => !a.isPinned);
 
   return (
     <div className="space-y-6">
@@ -179,6 +190,32 @@ export default function Announcements() {
           <p className="text-muted-foreground">Building announcements replacing the WhatsApp group</p>
         </div>
         <NewAnnouncementDialog />
+      </div>
+
+      {/* Search & filter */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search notices..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="All Categories" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {Object.entries(CATEGORY_COLORS).map(([k]) => (
+              <SelectItem key={k} value={k} className="capitalize">{k}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(search || categoryFilter !== "all") && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setCategoryFilter("all"); }}>Clear</Button>
+        )}
+        <span className="ml-auto text-sm text-muted-foreground">{filtered.length} notice{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
       {isLoading ? (

@@ -18,8 +18,12 @@ import Announcements from "@/pages/announcements";
 import Visitors from "@/pages/visitors";
 import Payments from "@/pages/payments";
 import Contractors from "@/pages/contractors";
+import JobDetail from "@/pages/contractors/job-detail";
 import Residents from "@/pages/residents/index";
+import ResidentDetail from "@/pages/residents/[id]";
 import Reports from "@/pages/reports";
+import UnitLedger from "@/pages/buildings/unit-ledger";
+import Settings from "@/pages/settings";
 
 import GatePage from "@/pages/gate/index";
 import PortalLogin from "@/pages/portal/login";
@@ -92,14 +96,18 @@ function Router() {
               <Route path="/" component={Dashboard} />
               <Route path="/buildings" component={Buildings} />
               <Route path="/buildings/:id" component={BuildingDetail} />
+              <Route path="/residents/:id" component={ResidentDetail} />
               <Route path="/residents" component={Residents} />
               <Route path="/issues/new" component={NewIssue} />
               <Route path="/issues/:id" component={IssueDetail} />
               <Route path="/issues" component={Issues} />
               <Route path="/announcements" component={Announcements} />
               <Route path="/visitors" component={Visitors} />
+              <Route path="/buildings/:buildingId/units/:unitId" component={UnitLedger} />
               <Route path="/payments" component={Payments} />
               <Route path="/reports" component={Reports} />
+              <Route path="/settings" component={Settings} />
+              <Route path="/contractors/jobs/:id" component={JobDetail} />
               <Route path="/contractors" component={Contractors} />
               <Route component={NotFound} />
             </Switch>
