@@ -4,7 +4,7 @@ import {
   useListBuildings,
   getListContractorsQueryKey, getListJobsQueryKey, getListBuildingsQueryKey
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -17,7 +17,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
-import { Plus, Star, Wrench, ChevronRight } from "lucide-react";
+import { Plus, Star, Wrench, ChevronRight, Printer, CheckCircle2, ClipboardCheck } from "lucide-react";
+import { printHtml, formatDate, today, loadSettings } from "@/lib/print-utils";
 
 const JOB_STATUS_COLORS: Record<string, string> = {
   quoted: "bg-gray-100 text-gray-600",
@@ -126,6 +127,276 @@ function AddContractorDialog() {
   );
 }
 
+function printJobCard(job: any, contractor: any, building: any) {
+  const s = loadSettings();
+  const html = `
+    <div class="header">
+      <div>
+        <div class="brand">${s.companyName}</div>
+        <div style="font-size:12px;color:#666">${s.companyAddress} · ${s.companyPhone}</div>
+        <h1 style="margin-top:8px">Work Order / Job Card</h1>
+        <p style="color:#666;font-size:12px">Ref: JOB-${String(job.id).padStart(4,"0")}</p>
+      </div>
+      <div class="meta">
+        <div style="font-size:11px;color:#888">Date Issued</div>
+        <div style="font-size:12px;font-weight:600">${today()}</div>
+        <div class="stamp" style="margin-top:8px;text-transform:uppercase">${job.status.replace("_"," ")}</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="box">
+        <div class="label">Contractor</div>
+        <div class="value">${contractor?.name ?? "—"}</div>
+        ${contractor?.company ? `<div style="font-size:12px;color:#666;margin-top:2px">${contractor.company}</div>` : ""}
+        ${contractor?.phone ? `<div style="font-size:12px;color:#666">${contractor.phone}</div>` : ""}
+        <div style="font-size:11px;margin-top:4px;text-transform:capitalize;color:#555">${contractor?.trade ?? ""}</div>
+      </div>
+      <div class="box">
+        <div class="label">Site / Building</div>
+        <div class="value">${building?.name ?? "—"}</div>
+        ${building?.address ? `<div style="font-size:12px;color:#666;margin-top:2px">${building.address}</div>` : ""}
+      </div>
+    </div>
+
+    <div class="box section">
+      <div class="label">Job Description</div>
+      <div class="value" style="margin-top:6px">${job.title}</div>
+      ${job.description ? `<p style="font-size:12px;color:#555;margin-top:8px">${job.description}</p>` : ""}
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-box">
+        <div class="label">Quoted Amount</div>
+        <div class="value-lg">${job.quotedAmount ? `KES ${Number(job.quotedAmount).toLocaleString()}` : "TBD"}</div>
+      </div>
+      <div class="summary-box">
+        <div class="label">Scheduled Date</div>
+        <div class="value-lg">${job.scheduledDate ? formatDate(job.scheduledDate) : "—"}</div>
+      </div>
+      <div class="summary-box">
+        <div class="label">Final Amount</div>
+        <div class="value-lg" style="color:#15803d">${job.finalAmount ? `KES ${Number(job.finalAmount).toLocaleString()}` : "—"}</div>
+      </div>
+      <div class="summary-box">
+        <div class="label">Completed Date</div>
+        <div class="value-lg">${job.completedDate ? formatDate(job.completedDate) : "—"}</div>
+      </div>
+    </div>
+
+    ${job.notes ? `
+    <div class="box section">
+      <div class="label">Completion Notes</div>
+      <p style="font-size:13px;color:#444;margin-top:6px">${job.notes}</p>
+    </div>` : ""}
+
+    <div style="margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:48px">
+      <div>
+        <div style="border-top:1px solid #000;padding-top:6px;margin-top:40px">
+          <p style="font-weight:600">Authorised by (Client)</p>
+          <p style="font-size:12px;color:#666">${s.companyName}</p>
+          <p style="font-size:11px;color:#888;margin-top:4px">Date: _______________</p>
+        </div>
+      </div>
+      <div>
+        <div style="border-top:1px solid #000;padding-top:6px;margin-top:40px">
+          <p style="font-weight:600">Contractor Signature</p>
+          <p style="font-size:12px;color:#666">${contractor?.name ?? ""}</p>
+          <p style="font-size:11px;color:#888;margin-top:4px">Date: _______________</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Generated ${today()} by ${s.companyName} · Jengo Building Management Platform</p>
+    </div>
+  `;
+  printHtml(html, `Job Card — ${job.title}`);
+}
+
+function CompleteJobDialog({
+  job,
+  onClose,
+  onSuccess,
+}: {
+  job: any;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const qc = useQueryClient();
+  const updateJob = useUpdateJob();
+  const [finalAmount, setFinalAmount] = useState(job.quotedAmount ? String(Number(job.quotedAmount)) : "");
+  const [notes, setNotes] = useState(job.notes ?? "");
+  const [done, setDone] = useState(false);
+
+  const submit = () => {
+    updateJob.mutate(
+      {
+        id: job.id,
+        data: {
+          status: "completed",
+          completedDate: new Date().toISOString().split("T")[0],
+          finalAmount: finalAmount ? Number(finalAmount) : undefined,
+          notes: notes || undefined,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListJobsQueryKey() });
+          setDone(true);
+          onSuccess();
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardCheck className="w-4 h-4 text-green-600" />
+            Complete Job
+          </DialogTitle>
+        </DialogHeader>
+        {!done ? (
+          <div className="space-y-4">
+            <div className="p-3 bg-muted/40 rounded text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">{job.title}</p>
+              {job.quotedAmount && <p className="text-xs mt-0.5">Quoted: KES {Number(job.quotedAmount).toLocaleString()}</p>}
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Final Amount (KES)</label>
+              <Input
+                type="number"
+                min="0"
+                placeholder={job.quotedAmount ? String(Number(job.quotedAmount)) : "e.g. 15000"}
+                value={finalAmount}
+                onChange={e => setFinalAmount(e.target.value)}
+                data-testid="input-final-amount"
+              />
+              {finalAmount && job.quotedAmount && Number(finalAmount) !== Number(job.quotedAmount) && (
+                <p className={`text-xs mt-1 font-medium ${Number(finalAmount) > Number(job.quotedAmount) ? "text-red-600" : "text-green-600"}`}>
+                  {Number(finalAmount) > Number(job.quotedAmount) ? "+" : ""}
+                  KES {(Number(finalAmount) - Number(job.quotedAmount)).toLocaleString()} vs quoted
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Completion Notes (optional)</label>
+              <Textarea
+                placeholder="Work completed, materials used, observations..."
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                rows={3}
+                className="text-sm resize-none"
+                data-testid="textarea-completion-notes"
+              />
+            </div>
+            {updateJob.error && (
+              <p className="text-sm text-destructive">{(updateJob.error as Error).message}</p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+              <Button className="flex-1 gap-1 bg-green-600 hover:bg-green-700" onClick={submit} disabled={updateJob.isPending} data-testid="button-confirm-complete">
+                <CheckCircle2 className="w-4 h-4" />
+                {updateJob.isPending ? "Saving..." : "Mark Complete"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-2 text-center space-y-3">
+            <CheckCircle2 className="w-10 h-10 text-green-600 mx-auto" />
+            <p className="font-semibold text-green-800">Job Completed</p>
+            <Button className="w-full" onClick={onClose}>Done</Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RateContractorDialog({
+  contractor,
+  onClose,
+}: {
+  contractor: any;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [rating, setRating] = useState<number>(0);
+  const [hover, setHover] = useState<number>(0);
+  const [done, setDone] = useState(false);
+
+  const rateContractor = useMutation({
+    mutationFn: async (r: number) => {
+      const res = await fetch(`/api/contractors/${contractor.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: r }),
+      });
+      if (!res.ok) throw new Error("Failed to save rating");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: getListContractorsQueryKey() });
+      setDone(true);
+    },
+  });
+
+  const submit = () => {
+    if (!rating) return;
+    rateContractor.mutate(rating);
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-xs text-center">
+        <DialogHeader>
+          <DialogTitle>Rate Contractor</DialogTitle>
+        </DialogHeader>
+        {!done ? (
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">{contractor.name}</p>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setRating(n)}
+                  onMouseEnter={() => setHover(n)}
+                  onMouseLeave={() => setHover(0)}
+                  className="focus:outline-none"
+                  data-testid={`star-${n}`}
+                >
+                  <Star
+                    className={`w-8 h-8 transition-colors ${n <= (hover || rating) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
+                  />
+                </button>
+              ))}
+            </div>
+            {rating > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {rating === 1 ? "Poor" : rating === 2 ? "Fair" : rating === 3 ? "Good" : rating === 4 ? "Very Good" : "Excellent"}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={onClose}>Skip</Button>
+              <Button className="flex-1" onClick={submit} disabled={!rating || updateContractor.isPending} data-testid="button-submit-rating">
+                Submit Rating
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-4 space-y-3">
+            <p className="font-semibold text-green-700">Rating saved ✓</p>
+            <Button className="w-full" onClick={onClose}>Close</Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CommissionJobDialog({ contractors, buildings }: { contractors: any[]; buildings: any[] }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
@@ -206,6 +477,8 @@ export default function Contractors() {
   const [, setLocation] = useLocation();
   const [jobStatusFilter, setJobStatusFilter] = useState("all");
   const [jobBuildingFilter, setJobBuildingFilter] = useState("all");
+  const [completingJob, setCompletingJob] = useState<any | null>(null);
+  const [ratingContractor, setRatingContractor] = useState<any | null>(null);
   const { data: contractors, isLoading: loadingContractors } = useListContractors({ query: { queryKey: getListContractorsQueryKey() } });
   const jobParams: Record<string, unknown> = {};
   if (jobStatusFilter !== "all") jobParams.status = jobStatusFilter;
@@ -223,8 +496,12 @@ export default function Contractors() {
   const advanceJob = (job: any) => {
     const next = JOB_STATUS_NEXT[job.status];
     if (!next) return;
+    if (next === "completed") {
+      setCompletingJob(job);
+      return;
+    }
     updateJob.mutate(
-      { id: job.id, data: { status: next as any, completedDate: next === "completed" ? new Date().toISOString().split("T")[0] : undefined } },
+      { id: job.id, data: { status: next as any } },
       { onSuccess: () => qc.invalidateQueries({ queryKey: getListJobsQueryKey(Object.keys(jobParams).length ? jobParams as any : undefined) }) }
     );
   };
@@ -285,15 +562,16 @@ export default function Contractors() {
                   {jobs.map(job => {
                     const contractor = contractorMap[job.contractorId];
                     const building = buildingMap[job.buildingId];
+                    const nextStatus = JOB_STATUS_NEXT[job.status];
                     return (
                     <div
                       key={job.id}
-                      className="flex items-center justify-between p-4 hover:bg-muted/30 cursor-pointer transition-colors"
+                      className="flex items-start justify-between p-4 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => setLocation(`/contractors/jobs/${job.id}`)}
                       data-testid={`row-job-${job.id}`}
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-xs px-2 py-0.5 rounded font-medium ${JOB_STATUS_COLORS[job.status]}`}>
                             {job.status.replace("_", " ")}
                           </span>
@@ -305,18 +583,48 @@ export default function Contractors() {
                           )}
                         </div>
                         <p className="font-medium text-foreground">{job.title}</p>
-                        <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
+                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-0.5">
                           {job.quotedAmount && <span>Quoted: KES {Number(job.quotedAmount).toLocaleString()}</span>}
-                          {job.finalAmount && <span>Final: KES {Number(job.finalAmount).toLocaleString()}</span>}
-                          {job.scheduledDate && <span>Scheduled: {job.scheduledDate}</span>}
-                          {job.completedDate && <span>Completed: {job.completedDate}</span>}
+                          {job.finalAmount && <span className="text-green-700 font-medium">Final: KES {Number(job.finalAmount).toLocaleString()}</span>}
+                          {job.scheduledDate && <span>Scheduled: {formatDate(job.scheduledDate)}</span>}
+                          {job.completedDate && <span>Completed: {formatDate(job.completedDate)}</span>}
                         </div>
-                        {job.notes && <p className="text-xs text-muted-foreground mt-1 italic">{job.notes}</p>}
+                        {job.notes && <p className="text-xs text-muted-foreground mt-1 italic truncate">{job.notes}</p>}
                       </div>
-                      <div className="ml-4 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                        {JOB_STATUS_NEXT[job.status] && (
-                          <Button size="sm" variant="outline" onClick={() => advanceJob(job)} disabled={updateJob.isPending} data-testid={`button-advance-${job.id}`}>
-                            Mark {JOB_STATUS_NEXT[job.status]?.replace("_", " ")}
+                      <div className="ml-3 flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1 text-muted-foreground hover:text-foreground h-7 px-2"
+                          onClick={() => printJobCard(job, contractor, building)}
+                          title="Print Job Card"
+                          data-testid={`button-print-${job.id}`}
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                        </Button>
+                        {job.status === "completed" && contractor && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1 text-amber-600 hover:text-amber-700 h-7 px-2"
+                            onClick={() => setRatingContractor(contractor)}
+                            title="Rate Contractor"
+                            data-testid={`button-rate-${job.id}`}
+                          >
+                            <Star className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        {nextStatus && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className={nextStatus === "completed" ? "gap-1 text-green-700 border-green-200 hover:bg-green-50 h-7" : "h-7"}
+                            onClick={() => advanceJob(job)}
+                            disabled={updateJob.isPending}
+                            data-testid={`button-advance-${job.id}`}
+                          >
+                            {nextStatus === "completed" && <ClipboardCheck className="w-3.5 h-3.5" />}
+                            {nextStatus === "completed" ? "Complete" : `Mark ${nextStatus.replace("_", " ")}`}
                           </Button>
                         )}
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -328,6 +636,24 @@ export default function Contractors() {
               )}
             </CardContent>
           </Card>
+
+          {completingJob && (
+            <CompleteJobDialog
+              job={completingJob}
+              onClose={() => setCompletingJob(null)}
+              onSuccess={() => {
+                const c = contractorMap[completingJob.contractorId];
+                setCompletingJob(null);
+                if (c) setRatingContractor(c);
+              }}
+            />
+          )}
+          {ratingContractor && (
+            <RateContractorDialog
+              contractor={ratingContractor}
+              onClose={() => setRatingContractor(null)}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="contractors" className="mt-4">
