@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
-  useGetBuilding, useListUnits, useListResidents, useListIssues, useCreateResident,
-  getGetBuildingQueryKey, getListUnitsQueryKey, getListResidentsQueryKey, getListIssuesQueryKey
+  useGetBuilding, useListUnits, useListResidents, useListIssues,
+  useCreateResident, useUpdateBuilding, useCreateUnit,
+  getGetBuildingQueryKey, getListUnitsQueryKey, getListResidentsQueryKey,
+  getListIssuesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Building, Users, Phone, Home, UserPlus } from "lucide-react";
+import { ArrowLeft, Building, Users, Phone, Home, UserPlus, Pencil, Plus } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   occupied: "bg-green-100 text-green-700",
@@ -31,6 +33,205 @@ const RESIDENT_STATUS_COLORS: Record<string, string> = {
   inactive: "bg-gray-100 text-gray-600",
   pending: "bg-amber-100 text-amber-700",
 };
+
+const NEIGHBOURHOODS = [
+  { value: "kilimani", label: "Kilimani" },
+  { value: "westlands", label: "Westlands" },
+  { value: "lavington", label: "Lavington" },
+  { value: "south_b", label: "South B" },
+  { value: "other", label: "Other" },
+];
+
+function EditBuildingDialog({
+  building,
+  onClose,
+}: {
+  building: any;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const updateBuilding = useUpdateBuilding();
+  const [form, setForm] = useState({
+    name: building.name ?? "",
+    address: building.address ?? "",
+    neighbourhood: building.neighbourhood ?? "kilimani",
+    caretakerName: building.caretakerName ?? "",
+    caretakerPhone: building.caretakerPhone ?? "",
+    managementCompany: building.managementCompany ?? "",
+    serviceChargeAmount: building.serviceChargeAmount ? String(building.serviceChargeAmount) : "",
+  });
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateBuilding.mutate(
+      {
+        id: building.id,
+        data: {
+          name: form.name || undefined,
+          address: form.address || undefined,
+          caretakerName: form.caretakerName || undefined,
+          caretakerPhone: form.caretakerPhone || undefined,
+          serviceChargeAmount: form.serviceChargeAmount ? Number(form.serviceChargeAmount) : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetBuildingQueryKey(building.id) });
+          onClose();
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Building</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs font-medium mb-1 block">Building Name</label>
+            <Input value={form.name} onChange={e => set("name", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Address</label>
+            <Input value={form.address} onChange={e => set("address", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Neighbourhood</label>
+            <Select value={form.neighbourhood} onValueChange={v => set("neighbourhood", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {NEIGHBOURHOODS.map(n => (
+                  <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Service Charge (KES/month)</label>
+            <Input
+              type="number"
+              placeholder="8500"
+              value={form.serviceChargeAmount}
+              onChange={e => set("serviceChargeAmount", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Management Company</label>
+            <Input value={form.managementCompany} onChange={e => set("managementCompany", e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Caretaker Name</label>
+              <Input placeholder="John Kamau" value={form.caretakerName} onChange={e => set("caretakerName", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Caretaker Phone</label>
+              <Input placeholder="0712 345 678" value={form.caretakerPhone} onChange={e => set("caretakerPhone", e.target.value)} />
+            </div>
+          </div>
+          <Button type="submit" className="w-full" disabled={updateBuilding.isPending}>
+            {updateBuilding.isPending ? "Saving..." : "Save Changes"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddUnitDialog({
+  buildingId,
+  onClose,
+}: {
+  buildingId: number;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const createUnit = useCreateUnit();
+  const [form, setForm] = useState({
+    unitNumber: "",
+    floor: "",
+    bedrooms: "2",
+    status: "vacant",
+    monthlyRent: "",
+  });
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.unitNumber) return;
+    createUnit.mutate(
+      {
+        buildingId,
+        data: {
+          unitNumber: form.unitNumber,
+          floor: form.floor ? Number(form.floor) : undefined,
+          bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
+          status: form.status as any,
+          monthlyRent: form.monthlyRent ? Number(form.monthlyRent) : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListUnitsQueryKey(buildingId) });
+          onClose();
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Unit</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs font-medium mb-1 block">Unit Number *</label>
+            <Input placeholder="A101" value={form.unitNumber} onChange={e => set("unitNumber", e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Floor</label>
+              <Input type="number" min="0" placeholder="1" value={form.floor} onChange={e => set("floor", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Bedrooms</label>
+              <Input type="number" min="0" placeholder="2" value={form.bedrooms} onChange={e => set("bedrooms", e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Status</label>
+            <Select value={form.status} onValueChange={v => set("status", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vacant">Vacant</SelectItem>
+                <SelectItem value="occupied">Occupied</SelectItem>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Monthly Rent (KES)</label>
+            <Input
+              type="number"
+              placeholder="45000"
+              value={form.monthlyRent}
+              onChange={e => set("monthlyRent", e.target.value)}
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={createUnit.isPending || !form.unitNumber}>
+            {createUnit.isPending ? "Adding..." : "Add Unit"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function AddResidentDialog({ buildingId, units, onClose }: { buildingId: number; units: any[]; onClose: () => void }) {
   const qc = useQueryClient();
@@ -56,18 +257,17 @@ function AddResidentDialog({ buildingId, units, onClose }: { buildingId: number;
           email: form.email || undefined,
           moveInDate: form.moveInDate || undefined,
           isOwner: form.isOwner,
-        }
+        },
       },
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getListResidentsQueryKey({ buildingId }) });
           onClose();
-        }
+        },
       }
     );
   };
 
-  const occupiedUnitIds = new Set<number>();
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
@@ -100,7 +300,7 @@ function AddResidentDialog({ buildingId, units, onClose }: { buildingId: number;
               <SelectContent>
                 {units.map(u => (
                   <SelectItem key={u.id} value={String(u.id)}>
-                    Unit {u.unitNumber} {u.status !== "occupied" ? "" : " (occupied)"}
+                    Unit {u.unitNumber}{u.status === "occupied" ? " (occupied)" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -111,10 +311,19 @@ function AddResidentDialog({ buildingId, units, onClose }: { buildingId: number;
             <Input type="date" value={form.moveInDate} onChange={e => set("moveInDate", e.target.value)} />
           </div>
           <label className="flex items-center gap-2 cursor-pointer text-sm">
-            <input type="checkbox" checked={form.isOwner} onChange={e => set("isOwner", e.target.checked)} className="rounded" />
+            <input
+              type="checkbox"
+              checked={form.isOwner}
+              onChange={e => set("isOwner", e.target.checked)}
+              className="rounded"
+            />
             Owner-occupier
           </label>
-          <Button type="submit" className="w-full" disabled={createResident.isPending || !form.firstName || !form.lastName || !form.phone || !form.unitId}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={createResident.isPending || !form.firstName || !form.lastName || !form.phone || !form.unitId}
+          >
             {createResident.isPending ? "Adding..." : "Add Resident"}
           </Button>
         </form>
@@ -128,11 +337,23 @@ export default function BuildingDetail() {
   const [, setLocation] = useLocation();
   const id = Number(params?.id);
   const [addingResident, setAddingResident] = useState(false);
+  const [editingBuilding, setEditingBuilding] = useState(false);
+  const [addingUnit, setAddingUnit] = useState(false);
 
-  const { data: building, isLoading } = useGetBuilding(id, { query: { queryKey: getGetBuildingQueryKey(id), enabled: !!id } });
-  const { data: units } = useListUnits(id, { query: { queryKey: getListUnitsQueryKey(id), enabled: !!id } });
-  const { data: residents } = useListResidents({ buildingId: id }, { query: { queryKey: getListResidentsQueryKey({ buildingId: id }), enabled: !!id } });
-  const { data: issues } = useListIssues({ buildingId: id }, { query: { queryKey: getListIssuesQueryKey({ buildingId: id }), enabled: !!id } });
+  const { data: building, isLoading } = useGetBuilding(id, {
+    query: { queryKey: getGetBuildingQueryKey(id), enabled: !!id },
+  });
+  const { data: units } = useListUnits(id, {
+    query: { queryKey: getListUnitsQueryKey(id), enabled: !!id },
+  });
+  const { data: residents } = useListResidents(
+    { buildingId: id },
+    { query: { queryKey: getListResidentsQueryKey({ buildingId: id }), enabled: !!id } }
+  );
+  const { data: issues } = useListIssues(
+    { buildingId: id },
+    { query: { queryKey: getListIssuesQueryKey({ buildingId: id }), enabled: !!id } }
+  );
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
   if (!building) return <div className="p-8 text-center text-muted-foreground">Building not found</div>;
@@ -140,11 +361,22 @@ export default function BuildingDetail() {
   const occupiedUnits = units?.filter(u => u.status === "occupied").length ?? 0;
   const openIssues = issues?.filter(i => i.status === "open" || i.status === "in_progress").length ?? 0;
   const score = building.reputationScore ? Number(building.reputationScore) : null;
-  const scoreColor = score !== null ? (score >= 8 ? "text-green-600" : score >= 6 ? "text-amber-600" : "text-red-600") : "text-muted-foreground";
+  const scoreColor =
+    score !== null
+      ? score >= 8
+        ? "text-green-600"
+        : score >= 6
+          ? "text-amber-600"
+          : "text-red-600"
+      : "text-muted-foreground";
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <button onClick={() => setLocation("/buildings")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm" data-testid="button-back">
+      <button
+        onClick={() => setLocation("/buildings")}
+        className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
+        data-testid="button-back"
+      >
         <ArrowLeft className="w-4 h-4" />
         Back to Buildings
       </button>
@@ -158,13 +390,19 @@ export default function BuildingDetail() {
             {building.neighbourhood.replace("_", " ")}
           </span>
         </div>
-        {score !== null && (
-          <div className="text-center p-4 bg-card border border-border rounded-xl">
-            <p className="text-xs text-muted-foreground font-medium mb-1">Reputation Score</p>
-            <p className={`text-4xl font-bold ${scoreColor}`}>{score.toFixed(1)}</p>
-            <p className="text-xs text-muted-foreground">/10</p>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditingBuilding(true)} data-testid="button-edit-building">
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
+          </Button>
+          {score !== null && (
+            <div className="text-center p-4 bg-card border border-border rounded-xl">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Reputation Score</p>
+              <p className={`text-4xl font-bold ${scoreColor}`}>{score.toFixed(1)}</p>
+              <p className="text-xs text-muted-foreground">/10</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Metrics */}
@@ -190,7 +428,9 @@ export default function BuildingDetail() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Open Issues</p>
-            <p className={`text-2xl font-bold mt-1 ${openIssues > 0 ? "text-red-600" : "text-foreground"}`}>{openIssues}</p>
+            <p className={`text-2xl font-bold mt-1 ${openIssues > 0 ? "text-red-600" : "text-foreground"}`}>
+              {openIssues}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -221,7 +461,9 @@ export default function BuildingDetail() {
           {building.serviceChargeAmount && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Service Charge:</span>
-              <span className="font-medium text-primary">KES {Number(building.serviceChargeAmount).toLocaleString()}/mo</span>
+              <span className="font-medium text-primary">
+                KES {Number(building.serviceChargeAmount).toLocaleString()}/mo
+              </span>
             </div>
           )}
         </CardContent>
@@ -230,13 +472,23 @@ export default function BuildingDetail() {
       {/* Tabs: Units / Residents / Issues */}
       <Tabs defaultValue="units">
         <TabsList>
-          <TabsTrigger value="units" data-testid="tab-units">Units ({units?.length ?? 0})</TabsTrigger>
-          <TabsTrigger value="residents" data-testid="tab-residents">Residents ({residents?.length ?? 0})</TabsTrigger>
-
-          <TabsTrigger value="issues" data-testid="tab-issues">Issues ({issues?.length ?? 0})</TabsTrigger>
+          <TabsTrigger value="units" data-testid="tab-units">
+            Units ({units?.length ?? 0})
+          </TabsTrigger>
+          <TabsTrigger value="residents" data-testid="tab-residents">
+            Residents ({residents?.length ?? 0})
+          </TabsTrigger>
+          <TabsTrigger value="issues" data-testid="tab-issues">
+            Issues ({issues?.length ?? 0})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="units" className="mt-4">
+          <div className="flex justify-end mb-3">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => setAddingUnit(true)} data-testid="button-add-unit">
+              <Plus className="w-3.5 h-3.5" /> Add Unit
+            </Button>
+          </div>
           <Card>
             <CardContent className="p-0">
               {!units?.length ? (
@@ -244,21 +496,29 @@ export default function BuildingDetail() {
               ) : (
                 <div className="divide-y divide-border">
                   {units.map(unit => (
-                    <div key={unit.id} className="flex items-center justify-between p-4" data-testid={`row-unit-${unit.id}`}>
+                    <div
+                      key={unit.id}
+                      className="flex items-center justify-between p-4"
+                      data-testid={`row-unit-${unit.id}`}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-secondary rounded-md">
                           <Home className="w-4 h-4 text-primary" />
                         </div>
                         <div>
                           <p className="font-semibold text-foreground">Unit {unit.unitNumber}</p>
-                          <p className="text-sm text-muted-foreground">Floor {unit.floor} · {unit.bedrooms} bed</p>
+                          <p className="text-sm text-muted-foreground">
+                            Floor {unit.floor} · {unit.bedrooms} bed
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         {unit.monthlyRent && (
                           <p className="text-sm font-medium">KES {Number(unit.monthlyRent).toLocaleString()}</p>
                         )}
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium capitalize ${STATUS_COLORS[unit.status] ?? "bg-gray-100 text-gray-600"}`}>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-medium capitalize ${STATUS_COLORS[unit.status] ?? "bg-gray-100 text-gray-600"}`}
+                        >
                           {unit.status}
                         </span>
                       </div>
@@ -272,7 +532,12 @@ export default function BuildingDetail() {
 
         <TabsContent value="residents" className="mt-4">
           <div className="flex justify-end mb-3">
-            <Button size="sm" className="gap-2" onClick={() => setAddingResident(true)} data-testid="button-add-resident">
+            <Button
+              size="sm"
+              className="gap-2"
+              onClick={() => setAddingResident(true)}
+              data-testid="button-add-resident"
+            >
               <UserPlus className="w-4 h-4" /> Add Resident
             </Button>
           </div>
@@ -283,9 +548,15 @@ export default function BuildingDetail() {
               ) : (
                 <div className="divide-y divide-border">
                   {residents.map(resident => (
-                    <div key={resident.id} className="flex items-center justify-between p-4" data-testid={`row-resident-${resident.id}`}>
+                    <div
+                      key={resident.id}
+                      className="flex items-center justify-between p-4"
+                      data-testid={`row-resident-${resident.id}`}
+                    >
                       <div>
-                        <p className="font-semibold text-foreground">{resident.firstName} {resident.lastName}</p>
+                        <p className="font-semibold text-foreground">
+                          {resident.firstName} {resident.lastName}
+                        </p>
                         <div className="flex gap-3 text-sm text-muted-foreground mt-0.5">
                           {resident.email && <span>{resident.email}</span>}
                           {resident.phone && <span>{resident.phone}</span>}
@@ -294,7 +565,9 @@ export default function BuildingDetail() {
                           <span className="text-xs text-primary font-medium">Owner</span>
                         )}
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium capitalize ${RESIDENT_STATUS_COLORS[resident.status] ?? "bg-gray-100 text-gray-600"}`}>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded font-medium capitalize ${RESIDENT_STATUS_COLORS[resident.status] ?? "bg-gray-100 text-gray-600"}`}
+                      >
                         {resident.status}
                       </span>
                     </div>
@@ -313,13 +586,20 @@ export default function BuildingDetail() {
               ) : (
                 <div className="divide-y divide-border">
                   {issues.map(issue => (
-                    <div key={issue.id} className="flex items-center justify-between p-4 hover:bg-muted/40 cursor-pointer transition-colors" onClick={() => setLocation(`/issues/${issue.id}`)} data-testid={`row-issue-${issue.id}`}>
+                    <div
+                      key={issue.id}
+                      className="flex items-center justify-between p-4 hover:bg-muted/40 cursor-pointer transition-colors"
+                      onClick={() => setLocation(`/issues/${issue.id}`)}
+                      data-testid={`row-issue-${issue.id}`}
+                    >
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-xs px-2 py-0.5 rounded font-medium ${ISSUE_STATUS_COLORS[issue.status]}`}>
                             {issue.status.replace("_", " ")}
                           </span>
-                          <span className="text-xs text-muted-foreground capitalize">{issue.priority} · {issue.category}</span>
+                          <span className="text-xs text-muted-foreground capitalize">
+                            {issue.priority} · {issue.category}
+                          </span>
                         </div>
                         <p className="font-medium text-foreground">{issue.title}</p>
                       </div>
@@ -333,12 +613,14 @@ export default function BuildingDetail() {
         </TabsContent>
       </Tabs>
 
+      {editingBuilding && (
+        <EditBuildingDialog building={building} onClose={() => setEditingBuilding(false)} />
+      )}
+      {addingUnit && (
+        <AddUnitDialog buildingId={id} onClose={() => setAddingUnit(false)} />
+      )}
       {addingResident && (
-        <AddResidentDialog
-          buildingId={id}
-          units={units ?? []}
-          onClose={() => setAddingResident(false)}
-        />
+        <AddResidentDialog buildingId={id} units={units ?? []} onClose={() => setAddingResident(false)} />
       )}
     </div>
   );

@@ -65,6 +65,12 @@ All routes under `/api`:
 - `POST /api/auth/logout` — destroy session
 - `GET /api/auth/me` — return current resident session
 
+### Analytics & Operations (Phase 5)
+- Dashboard now shows 3 recharts charts: Issues by Category (donut), Payment Collection (bar), Building Scores (horizontal bar)
+- `POST /api/payments/bulk-generate` — generate monthly service charges for all active residents in a building (buildingId, month YYYY-MM, dueDate, optional overrideAmount)
+- Management Issue Detail — contractor assignment dropdown (replaces freetext), lists all contractors from DB
+- Payments page — "Generate Charges" button opens dialog: select building, month, due date → creates one pending charge per active resident
+
 ### Gate Security Terminal (Phase 4)
 - `POST /api/gate/auth` — guard logs in with PIN (default: `1234`, set `GATE_PIN` env var to override)
 - `GET /api/gate/me` — check gate session
