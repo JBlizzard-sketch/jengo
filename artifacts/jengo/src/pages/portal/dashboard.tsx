@@ -1,13 +1,13 @@
 import { useResidentAuth } from "@/contexts/resident-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "wouter";
-import { AlertCircle, CreditCard, Megaphone, Users, Phone, Building, Home, ChevronRight, Pin } from "lucide-react";
+import { AlertCircle, CreditCard, Megaphone, Users, Phone, Building, Home, ChevronRight, Pin, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 interface PortalHome {
-  resident: { name: string; email: string | null; isOwner: boolean | null };
-  unit: { unitNumber: string; floor: number; bedrooms: number; monthlyRent: string | null };
+  resident: { name: string; phone: string | null; email: string | null; isOwner: boolean | null };
+  unit: { unitNumber: string; floor: number; bedrooms: number; monthlyRent: string | null; leaseEndDate: string | null };
   building: { name: string; neighbourhood: string; caretakerName: string | null; caretakerPhone: string | null };
   stats: { openIssues: number; overduePayments: number; pendingPayments: number };
   recentIssues: any[];
@@ -115,6 +115,12 @@ export default function PortalDashboard() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Monthly Rent</span>
                   <span className="font-medium text-primary">KES {Number(data.unit.monthlyRent).toLocaleString()}</span>
+                </div>
+              )}
+              {data.unit.leaseEndDate && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />Lease End</span>
+                  <span className="font-medium">{new Date(data.unit.leaseEndDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</span>
                 </div>
               )}
               {data.resident.isOwner && (

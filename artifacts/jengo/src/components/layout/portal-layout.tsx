@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useResidentAuth } from "@/contexts/resident-auth";
-import { Building, LayoutDashboard, AlertCircle, Megaphone, Users, CreditCard, LogOut, Menu } from "lucide-react";
+import { Building, LayoutDashboard, AlertCircle, Megaphone, Users, CreditCard, LogOut, Menu, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/portal/payments", label: "Payments", icon: CreditCard },
   { href: "/portal/announcements", label: "Notices", icon: Megaphone },
   { href: "/portal/visitors", label: "My Visitors", icon: Users },
+  { href: "/portal/profile", label: "My Profile", icon: UserCircle },
 ];
 
 function SidebarNav({ close = () => {} }: { close?: () => void }) {

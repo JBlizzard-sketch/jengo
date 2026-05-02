@@ -33,6 +33,7 @@ import PortalIssueDetail from "@/pages/portal/issue-detail";
 import PortalPayments from "@/pages/portal/payments";
 import PortalAnnouncements from "@/pages/portal/announcements";
 import PortalVisitors from "@/pages/portal/visitors";
+import PortalProfile from "@/pages/portal/profile";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
@@ -86,6 +87,9 @@ function Router() {
       </Route>
       <Route path="/portal/visitors">
         {() => <PortalGuard component={PortalVisitors} />}
+      </Route>
+      <Route path="/portal/profile">
+        {() => <PortalGuard component={PortalProfile} />}
       </Route>
 
       {/* Management dashboard routes */}

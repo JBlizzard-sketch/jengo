@@ -41,8 +41,8 @@ portalRouter.get("/home", async (req: Request, res: Response): Promise<void> => 
   const openIssues = myIssues.filter(i => i.status === "open" || i.status === "in_progress");
 
   res.json({
-    resident: { name: `${resident.firstName} ${resident.lastName}`, email: resident.email, isOwner: resident.isOwner },
-    unit: { unitNumber: unit.unitNumber, floor: unit.floor, bedrooms: unit.bedrooms, monthlyRent: unit.monthlyRent },
+    resident: { name: `${resident.firstName} ${resident.lastName}`, phone: resident.phone, email: resident.email, isOwner: resident.isOwner },
+    unit: { unitNumber: unit.unitNumber, floor: unit.floor, bedrooms: unit.bedrooms, monthlyRent: unit.monthlyRent, leaseEndDate: unit.leaseEndDate },
     building: { name: building.name, neighbourhood: building.neighbourhood, caretakerName: building.caretakerName, caretakerPhone: building.caretakerPhone },
     stats: {
       openIssues: openIssues.length,
@@ -195,6 +195,23 @@ portalRouter.get("/visitors", async (req: Request, res: Response): Promise<void>
     .where(eq(visitorsTable.residentId, residentId))
     .orderBy(desc(visitorsTable.createdAt));
   res.json(visitors);
+});
+
+// PATCH /api/portal/profile — resident updates own phone and email
+portalRouter.patch("/profile", async (req: Request, res: Response): Promise<void> => {
+  const residentId = req.session.residentId!;
+  const Body = z.object({
+    phone: z.string().min(8).max(20).optional(),
+    email: z.string().email().optional(),
+  }).refine(d => d.phone !== undefined || d.email !== undefined, {
+    message: "At least one field required",
+  });
+  const body = Body.parse(req.body);
+  const [updated] = await db.update(residentsTable)
+    .set({ ...(body.phone ? { phone: body.phone } : {}), ...(body.email ? { email: body.email } : {}) })
+    .where(eq(residentsTable.id, residentId))
+    .returning();
+  res.json({ name: `${updated.firstName} ${updated.lastName}`, phone: updated.phone, email: updated.email });
 });
 
 // POST /api/portal/visitors — pre-clear a visitor
