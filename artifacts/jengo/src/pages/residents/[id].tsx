@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight, CalendarClock, RotateCcw, FileText, CheckCircle2, RefreshCw, TrendingUp
+  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight, CalendarClock, RotateCcw, FileText, CheckCircle2, RefreshCw, TrendingUp, ScrollText
 } from "lucide-react";
 import { printHtml, formatKES, formatDate, today, loadSettings } from "@/lib/print-utils";
 import { Link } from "wouter";
@@ -40,6 +40,250 @@ const ISSUE_STATUS_COLORS: Record<string, string> = {
 
 function initials(first: string, last: string) {
   return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
+}
+
+const STATEMENT_RANGES = [
+  { label: "This Month", value: "this_month" },
+  { label: "Last 3 Months", value: "last_3" },
+  { label: "Last 6 Months", value: "last_6" },
+  { label: "This Year", value: "this_year" },
+  { label: "All Time", value: "all" },
+  { label: "Custom Range", value: "custom" },
+] as const;
+
+function getDateRange(range: string): { from: Date | null; to: Date } {
+  const now = new Date();
+  const to = new Date(now);
+  if (range === "this_month") {
+    return { from: new Date(now.getFullYear(), now.getMonth(), 1), to };
+  }
+  if (range === "last_3") {
+    const from = new Date(now); from.setMonth(from.getMonth() - 3); return { from, to };
+  }
+  if (range === "last_6") {
+    const from = new Date(now); from.setMonth(from.getMonth() - 6); return { from, to };
+  }
+  if (range === "this_year") {
+    return { from: new Date(now.getFullYear(), 0, 1), to };
+  }
+  return { from: null, to };
+}
+
+function StatementOfAccountDialog({
+  resident,
+  unit,
+  building,
+  payments,
+  onClose,
+}: {
+  resident: any;
+  unit: any;
+  building: any;
+  payments: any[];
+  onClose: () => void;
+}) {
+  const [range, setRange] = useState<string>("last_3");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState(new Date().toISOString().split("T")[0]);
+
+  const filteredPayments = payments.filter(p => {
+    const payDate = p.dueDate ? new Date(p.dueDate) : p.createdAt ? new Date(p.createdAt) : null;
+    if (!payDate) return true;
+    if (range === "custom") {
+      if (customFrom && payDate < new Date(customFrom)) return false;
+      if (customTo && payDate > new Date(customTo)) return false;
+      return true;
+    }
+    if (range === "all") return true;
+    const { from } = getDateRange(range);
+    if (from && payDate < from) return false;
+    return true;
+  }).sort((a, b) => new Date(a.dueDate ?? 0).getTime() - new Date(b.dueDate ?? 0).getTime());
+
+  const totalCharged = filteredPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalPaid = filteredPayments.filter(p => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
+  const totalOutstanding = filteredPayments.filter(p => p.status !== "paid" && p.status !== "waived").reduce((s, p) => s + Number(p.amount), 0);
+  const totalWaived = filteredPayments.filter(p => p.status === "waived").reduce((s, p) => s + Number(p.amount), 0);
+
+  const rangeLabel = STATEMENT_RANGES.find(r => r.value === range)?.label ?? "All Time";
+  const periodStr = range === "custom"
+    ? `${customFrom ? formatDate(customFrom) : "Start"} – ${customTo ? formatDate(customTo) : "Today"}`
+    : rangeLabel;
+
+  const printStatement = () => {
+    const s = loadSettings();
+    let runningBalance = 0;
+    const rows = filteredPayments.map(p => {
+      const charge = Number(p.amount);
+      const credit = p.status === "paid" ? charge : 0;
+      const waived = p.status === "waived" ? charge : 0;
+      runningBalance += charge - credit - waived;
+      const balStr = runningBalance > 0
+        ? `<span style="color:#b91c1c">${formatKES(runningBalance)} DR</span>`
+        : `<span style="color:#15803d">${formatKES(Math.abs(runningBalance))} CR</span>`;
+      return `<tr>
+        <td>${p.dueDate ? formatDate(p.dueDate) : "—"}</td>
+        <td>${p.description ?? "—"}</td>
+        <td>${p.month ?? "—"}</td>
+        <td style="text-align:right">${formatKES(charge)}</td>
+        <td style="text-align:right;color:#15803d">${credit > 0 ? formatKES(credit) : "—"}</td>
+        <td style="text-align:right">${balStr}</td>
+        <td><span class="badge ${p.status === "paid" ? "badge-green" : p.status === "overdue" ? "badge-red" : p.status === "waived" ? "badge-gray" : "badge-amber"}">${p.status}</span></td>
+      </tr>`;
+    }).join("");
+
+    const html = `
+      <div class="header">
+        <div>
+          <div class="brand">${s.companyName}</div>
+          <div style="font-size:12px;color:#666">${s.companyAddress} · ${s.companyPhone}</div>
+          <h1 style="margin-top:8px">Statement of Account</h1>
+          <p style="color:#666;font-size:12px">Period: ${periodStr}</p>
+        </div>
+        <div class="meta">
+          <div style="font-size:11px;color:#888">Date Issued</div>
+          <div style="font-size:12px;font-weight:600">${today()}</div>
+          <div style="font-size:10px;color:#888;margin-top:4px">Ref: SOA-${String(resident.id).padStart(4,"0")}-${Date.now().toString(36).toUpperCase().slice(-4)}</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="box">
+          <div class="label">Tenant</div>
+          <div class="value">${resident.firstName} ${resident.lastName}</div>
+          ${resident.phone ? `<div style="font-size:12px;color:#666;margin-top:2px">${resident.phone}</div>` : ""}
+          ${resident.email ? `<div style="font-size:12px;color:#666">${resident.email}</div>` : ""}
+        </div>
+        <div class="box">
+          <div class="label">Unit / Building</div>
+          <div class="value">Unit ${unit?.unitNumber ?? "—"}, ${building?.name ?? "—"}</div>
+          ${resident.moveInDate ? `<div style="font-size:12px;color:#666;margin-top:2px">Move-in: ${formatDate(resident.moveInDate)}</div>` : ""}
+          ${unit?.monthlyRent ? `<div style="font-size:12px;color:#666">Monthly Rent: KES ${Number(unit.monthlyRent).toLocaleString()}</div>` : ""}
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-box">
+          <div class="label">Total Charged</div>
+          <div class="value-lg">${formatKES(totalCharged)}</div>
+        </div>
+        <div class="summary-box">
+          <div class="label">Total Paid</div>
+          <div class="value-lg" style="color:#15803d">${formatKES(totalPaid)}</div>
+        </div>
+        <div class="summary-box ${totalOutstanding > 0 ? 'border-color:#fecaca' : ''}">
+          <div class="label">Outstanding Balance</div>
+          <div class="value-lg" style="color:${totalOutstanding > 0 ? "#b91c1c" : "#15803d"}">${formatKES(totalOutstanding)}${totalOutstanding > 0 ? " DR" : ""}</div>
+        </div>
+        ${totalWaived > 0 ? `<div class="summary-box"><div class="label">Waived</div><div class="value-lg" style="color:#6b7280">${formatKES(totalWaived)}</div></div>` : ""}
+      </div>
+
+      <div class="section">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Description</th><th>Period</th>
+            <th style="text-align:right">Charge</th>
+            <th style="text-align:right">Payment</th>
+            <th style="text-align:right">Balance</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody>${rows || "<tr><td colspan='7' style='text-align:center;color:#888;padding:16px'>No transactions in this period</td></tr>"}</tbody>
+        </table>
+      </div>
+
+      ${totalOutstanding > 0 ? `
+      <div class="box" style="margin-top:16px;border-color:#fecaca;background:#fff5f5">
+        <p style="font-weight:600;color:#b91c1c">Amount Due: ${formatKES(totalOutstanding)}</p>
+        <p style="font-size:12px;color:#666;margin-top:4px">Please settle the outstanding balance promptly. Contact us if you have any queries.</p>
+        ${s.mpesaPaybill ? `<p style="font-size:12px;color:#666;margin-top:4px">M-Pesa Paybill: <strong>${s.mpesaPaybill}</strong></p>` : ""}
+      </div>` : `
+      <div class="box" style="margin-top:16px;border-color:#bbf7d0;background:#f0fdf4">
+        <p style="font-weight:600;color:#15803d">Account Clear — No outstanding balance</p>
+      </div>`}
+
+      <div class="footer">
+        <p>Generated ${today()} by ${s.companyName} · Jengo Building Management Platform · This is a computer-generated statement.</p>
+      </div>
+    `;
+    printHtml(html, `Statement of Account — ${resident.firstName} ${resident.lastName}`);
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ScrollText className="w-4 h-4 text-primary" />
+            Statement of Account
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">{resident.firstName} {resident.lastName}</p>
+            <p>Unit {unit?.unitNumber ?? "—"} · {building?.name ?? "—"}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium mb-2 block">Period</label>
+            <div className="grid grid-cols-2 gap-2">
+              {STATEMENT_RANGES.map(r => (
+                <button
+                  key={r.value}
+                  onClick={() => setRange(r.value)}
+                  className={`text-xs px-3 py-2 rounded border transition-colors text-left font-medium ${
+                    range === r.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border hover:border-primary/40 hover:bg-muted/50"
+                  }`}
+                  data-testid={`range-${r.value}`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {range === "custom" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium mb-1 block">From</label>
+                <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">To</label>
+                <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="text-sm" />
+              </div>
+            </div>
+          )}
+
+          <div className="p-3 bg-muted/30 rounded-lg grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-xs text-muted-foreground">Transactions</p>
+              <p className="text-sm font-bold">{filteredPayments.length}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Paid</p>
+              <p className="text-sm font-bold text-green-600">KES {totalPaid.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Outstanding</p>
+              <p className={`text-sm font-bold ${totalOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                KES {totalOutstanding.toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1 gap-2" onClick={printStatement} data-testid="button-print-statement">
+              <ScrollText className="w-4 h-4" />
+              Generate Statement
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function LeaseRenewalDialog({
@@ -587,6 +831,7 @@ export default function ResidentDetail() {
   const [mpesaRef, setMpesaRef] = useState("");
   const [moveOutOpen, setMoveOutOpen] = useState(false);
   const [renewalOpen, setRenewalOpen] = useState(false);
+  const [statementOpen, setStatementOpen] = useState(false);
 
   const handleRecordPayment = (paymentId: number) => {
     updatePayment.mutate(
@@ -760,6 +1005,16 @@ export default function ResidentDetail() {
             </div>
           </div>
           <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-muted-foreground hover:text-foreground"
+              onClick={() => setStatementOpen(true)}
+              data-testid="button-statement"
+            >
+              <ScrollText className="w-4 h-4" />
+              Statement
+            </Button>
             {totalOverdue > 0 && (
               <Button
                 variant="outline"
@@ -1055,6 +1310,15 @@ export default function ResidentDetail() {
             ))}
           </CardContent>
         </Card>
+      )}
+      {statementOpen && (
+        <StatementOfAccountDialog
+          resident={resident}
+          unit={unit}
+          building={building}
+          payments={payments ?? []}
+          onClose={() => setStatementOpen(false)}
+        />
       )}
       {renewalOpen && (
         <LeaseRenewalDialog
