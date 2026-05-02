@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { issuesTable, issueCommentsTable } from "@workspace/db";
+import { issuesTable, issueCommentsTable, buildingsTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import {
   CreateIssueBody, UpdateIssueBody, AddIssueCommentBody,
@@ -39,6 +39,48 @@ issuesRouter.get("/summary", async (req, res) => {
     byCategory: byCategory.map(r => ({ category: r.category, count: r.count })),
     byPriority: byPriority.map(r => ({ priority: r.priority, count: r.count })),
     avgResolutionHours: 36,
+  });
+});
+
+issuesRouter.get("/report", async (req, res) => {
+  const buildings = await db.select().from(buildingsTable);
+  const allIssues = await db.select({
+    buildingId: issuesTable.buildingId,
+    status: issuesTable.status,
+    category: issuesTable.category,
+    priority: issuesTable.priority,
+    createdAt: issuesTable.createdAt,
+  }).from(issuesTable);
+
+  const byCategoryGlobal: Record<string, number> = {};
+  const byBuilding = buildings.map(b => {
+    const bIssues = allIssues.filter(i => i.buildingId === b.id);
+    const open = bIssues.filter(i => i.status === "open").length;
+    const inProgress = bIssues.filter(i => i.status === "in_progress").length;
+    const resolved = bIssues.filter(i => i.status === "resolved").length;
+    const closed = bIssues.filter(i => i.status === "closed").length;
+    bIssues.forEach(i => { byCategoryGlobal[i.category] = (byCategoryGlobal[i.category] ?? 0) + 1; });
+    return {
+      buildingId: b.id,
+      buildingName: b.name,
+      neighbourhood: b.neighbourhood,
+      total: bIssues.length,
+      open,
+      inProgress,
+      resolved,
+      closed,
+      resolutionRate: bIssues.length > 0 ? Math.round(((resolved + closed) / bIssues.length) * 100) : 0,
+    };
+  });
+
+  const totalOpen = allIssues.filter(i => i.status === "open").length;
+  const totalInProgress = allIssues.filter(i => i.status === "in_progress").length;
+  const totalResolved = allIssues.filter(i => ["resolved", "closed"].includes(i.status)).length;
+
+  res.json({
+    byBuilding,
+    byCategory: Object.entries(byCategoryGlobal).map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
+    totals: { open: totalOpen, inProgress: totalInProgress, resolved: totalResolved, total: allIssues.length },
   });
 });
 

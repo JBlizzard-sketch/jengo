@@ -204,17 +204,28 @@ function CommissionJobDialog({ contractors, buildings }: { contractors: any[]; b
 export default function Contractors() {
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
+  const [jobStatusFilter, setJobStatusFilter] = useState("all");
+  const [jobBuildingFilter, setJobBuildingFilter] = useState("all");
   const { data: contractors, isLoading: loadingContractors } = useListContractors({ query: { queryKey: getListContractorsQueryKey() } });
-  const { data: jobs, isLoading: loadingJobs } = useListJobs(undefined, { query: { queryKey: getListJobsQueryKey() } });
+  const jobParams: Record<string, unknown> = {};
+  if (jobStatusFilter !== "all") jobParams.status = jobStatusFilter;
+  if (jobBuildingFilter !== "all") jobParams.buildingId = Number(jobBuildingFilter);
+  const { data: jobs, isLoading: loadingJobs } = useListJobs(
+    Object.keys(jobParams).length ? jobParams as any : undefined,
+    { query: { queryKey: getListJobsQueryKey(Object.keys(jobParams).length ? jobParams as any : undefined) } }
+  );
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
   const updateJob = useUpdateJob();
+
+  const contractorMap = Object.fromEntries((contractors ?? []).map(c => [c.id, c]));
+  const buildingMap = Object.fromEntries((buildings ?? []).map(b => [b.id, b]));
 
   const advanceJob = (job: any) => {
     const next = JOB_STATUS_NEXT[job.status];
     if (!next) return;
     updateJob.mutate(
       { id: job.id, data: { status: next as any, completedDate: next === "completed" ? new Date().toISOString().split("T")[0] : undefined } },
-      { onSuccess: () => qc.invalidateQueries({ queryKey: getListJobsQueryKey() }) }
+      { onSuccess: () => qc.invalidateQueries({ queryKey: getListJobsQueryKey(Object.keys(jobParams).length ? jobParams as any : undefined) }) }
     );
   };
 
@@ -237,7 +248,29 @@ export default function Contractors() {
           <TabsTrigger value="contractors" data-testid="tab-contractors">Contractors ({contractors?.length ?? 0})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="jobs" className="mt-4">
+        <TabsContent value="jobs" className="mt-4 space-y-3">
+          {/* Job filters */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <Select value={jobStatusFilter} onValueChange={setJobStatusFilter}>
+              <SelectTrigger className="w-40" data-testid="select-job-status"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {Object.keys(JOB_STATUS_COLORS).map(s => (
+                  <SelectItem key={s} value={s} className="capitalize">{s.replace("_", " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={jobBuildingFilter} onValueChange={setJobBuildingFilter}>
+              <SelectTrigger className="w-52" data-testid="select-job-building"><SelectValue placeholder="All Buildings" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Buildings</SelectItem>
+                {buildings?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {(jobStatusFilter !== "all" || jobBuildingFilter !== "all") && (
+              <Button variant="ghost" size="sm" onClick={() => { setJobStatusFilter("all"); setJobBuildingFilter("all"); }}>Clear</Button>
+            )}
+          </div>
           <Card>
             <CardContent className="p-0">
               {loadingJobs ? (
@@ -245,11 +278,14 @@ export default function Contractors() {
               ) : !jobs?.length ? (
                 <div className="p-12 text-center">
                   <Wrench className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground">No jobs commissioned yet</p>
+                  <p className="text-muted-foreground">No jobs found</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {jobs.map(job => (
+                  {jobs.map(job => {
+                    const contractor = contractorMap[job.contractorId];
+                    const building = buildingMap[job.buildingId];
+                    return (
                     <div
                       key={job.id}
                       className="flex items-center justify-between p-4 hover:bg-muted/30 cursor-pointer transition-colors"
@@ -261,6 +297,12 @@ export default function Contractors() {
                           <span className={`text-xs px-2 py-0.5 rounded font-medium ${JOB_STATUS_COLORS[job.status]}`}>
                             {job.status.replace("_", " ")}
                           </span>
+                          {contractor && (
+                            <span className="text-xs text-muted-foreground">{contractor.name}</span>
+                          )}
+                          {building && (
+                            <span className="text-xs text-muted-foreground">· {building.name}</span>
+                          )}
                         </div>
                         <p className="font-medium text-foreground">{job.title}</p>
                         <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
@@ -280,7 +322,8 @@ export default function Contractors() {
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

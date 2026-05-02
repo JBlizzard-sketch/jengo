@@ -200,3 +200,13 @@ const data = await res.json();
 - 4 buildings (Kilimani Heights, Westlands Park, Lavington Court, South B Gardens)
 - 9 residents, 11 units, 6 issues, 4 announcements, 5 visitors, 12 payments, 5 contractors, 4 jobs
 - Test resident: `david.karanja@gmail.com` / unit `A1`
+
+## Phase History
+
+| Phase | Features |
+|---|---|
+| 1–8 | Core CRUD: buildings, units, residents, issues, payments, visitors, contractors, announcements, portal |
+| 9 | Unit Ledger, Settings page, Add Resident dialog, clickable unit rows |
+| 10 | Issue SLA tracking (age labels, red badge ≥48h), Contractor Job Detail (stepper, notes, status progression) |
+| 11 | Resident Detail page (avatar, summary cards, inline edit, payment history, open issues), Move Out button |
+| 12 | Contractor star rating on completed jobs (`PATCH /api/contractors/:id`), Payment Waive button, Announcement search + category filter, TS clean-up |
