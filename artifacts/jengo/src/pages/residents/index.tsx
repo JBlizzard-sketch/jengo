@@ -10,13 +10,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Search, Filter, LogOut, Phone, Mail, UserPlus, ChevronRight } from "lucide-react";
+import { Users, Search, Filter, LogOut, Phone, Mail, UserPlus, ChevronRight, Download } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   active: "bg-green-100 text-green-700",
   inactive: "bg-gray-100 text-gray-500",
   pending: "bg-amber-100 text-amber-700",
 };
+
+function exportResidentsCSV(residents: any[], buildingMap: Record<number, string>) {
+  const rows = [
+    ["Name", "Status", "Building", "Phone", "Email", "Move-in Date", "Owner"],
+    ...residents.map(r => [
+      `${r.firstName} ${r.lastName}`,
+      r.status,
+      buildingMap[r.buildingId] ?? String(r.buildingId),
+      r.phone ?? "",
+      r.email ?? "",
+      r.moveInDate ?? "",
+      r.isOwner ? "Yes" : "No",
+    ]),
+  ];
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `jengo-residents-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function MoveOutDialog({
   resident,
@@ -218,10 +241,22 @@ export default function Residents() {
           <h1 className="text-3xl font-bold text-foreground">Residents</h1>
           <p className="text-muted-foreground">All residents across your portfolio</p>
         </div>
-        <Button className="gap-2" onClick={() => setAddingResident(true)} data-testid="button-add-resident">
-          <UserPlus className="w-4 h-4" />
-          Add Resident
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => exportResidentsCSV(filtered, buildingMap)}
+            disabled={!filtered.length}
+            data-testid="button-export-csv"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+          <Button className="gap-2" onClick={() => setAddingResident(true)} data-testid="button-add-resident">
+            <UserPlus className="w-4 h-4" />
+            Add Resident
+          </Button>
+        </div>
       </div>
 
       {/* Summary */}

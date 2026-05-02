@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  useListPayments, useGetPaymentsSummary, useUpdatePayment, useListBuildings,
-  getListPaymentsQueryKey, getGetPaymentsSummaryQueryKey, getListBuildingsQueryKey
+  useListPayments, useGetPaymentsSummary, useUpdatePayment, useListBuildings, useListResidents,
+  getListPaymentsQueryKey, getGetPaymentsSummaryQueryKey, getListBuildingsQueryKey, getListResidentsQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download, AlertOctagon } from "lucide-react";
+import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download, AlertOctagon, Search } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -241,20 +241,30 @@ function exportCSV(payments: any[], buildings: any[]) {
 export default function Payments() {
   const [selectedBuilding, setSelectedBuilding] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [residentSearch, setResidentSearch] = useState("");
   const [recordingPayment, setRecordingPayment] = useState<any>(null);
   const [generatingCharges, setGeneratingCharges] = useState(false);
   const qc = useQueryClient();
   const updatePayment = useUpdatePayment();
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
+  const { data: residents } = useListResidents(undefined, { query: { queryKey: getListResidentsQueryKey() } });
+  const residentMap = Object.fromEntries((residents ?? []).map(r => [r.id, `${r.firstName} ${r.lastName}`]));
 
   const params: Record<string, unknown> = {};
   if (selectedBuilding !== "all") params.buildingId = Number(selectedBuilding);
   if (statusFilter !== "all") params.status = statusFilter;
 
-  const { data: payments, isLoading } = useListPayments(
+  const { data: rawPayments, isLoading } = useListPayments(
     Object.keys(params).length ? params as any : undefined,
     { query: { queryKey: getListPaymentsQueryKey(Object.keys(params).length ? params as any : undefined) } }
   );
+
+  const payments = residentSearch.trim()
+    ? (rawPayments ?? []).filter(p => {
+        const name = p.residentId ? (residentMap[p.residentId] ?? "").toLowerCase() : "";
+        return name.includes(residentSearch.toLowerCase());
+      })
+    : rawPayments;
   const { data: summary } = useGetPaymentsSummary(
     selectedBuilding !== "all" ? { buildingId: Number(selectedBuilding) } : undefined,
     { query: { queryKey: getGetPaymentsSummaryQueryKey(selectedBuilding !== "all" ? { buildingId: Number(selectedBuilding) } : undefined) } }
@@ -346,6 +356,16 @@ export default function Payments() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <Filter className="w-4 h-4 text-muted-foreground" />
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search resident..."
+            value={residentSearch}
+            onChange={e => setResidentSearch(e.target.value)}
+            className="pl-8 w-44 h-9"
+            data-testid="input-resident-search"
+          />
+        </div>
         <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
           <SelectTrigger className="w-52" data-testid="select-building">
             <SelectValue placeholder="All Buildings" />
@@ -367,6 +387,14 @@ export default function Payments() {
             <SelectItem value="waived">Waived</SelectItem>
           </SelectContent>
         </Select>
+        {(residentSearch || selectedBuilding !== "all" || statusFilter !== "all") && (
+          <Button variant="ghost" size="sm" onClick={() => { setResidentSearch(""); setSelectedBuilding("all"); setStatusFilter("all"); }}>
+            Clear
+          </Button>
+        )}
+        <span className="text-sm text-muted-foreground ml-auto">
+          {(payments ?? []).length} record{(payments ?? []).length !== 1 ? "s" : ""}
+        </span>
       </div>
 
       {/* Payment list */}
@@ -388,6 +416,9 @@ export default function Payments() {
                       <span className={`text-xs px-2 py-0.5 rounded border font-medium ${STATUS_COLORS[payment.status]}`}>
                         {payment.status}
                       </span>
+                      {payment.residentId && residentMap[payment.residentId] && (
+                        <span className="text-xs font-medium text-foreground/80">{residentMap[payment.residentId]}</span>
+                      )}
                       {payment.paymentMethod && (
                         <span className="text-xs text-muted-foreground">{METHOD_LABELS[payment.paymentMethod] ?? payment.paymentMethod}</span>
                       )}

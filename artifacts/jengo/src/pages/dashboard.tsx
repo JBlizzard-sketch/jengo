@@ -10,8 +10,9 @@ import {
   getGetIssuesSummaryQueryKey,
   getGetPaymentsSummaryQueryKey,
 } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building, Users, AlertCircle, CreditCard, Activity } from "lucide-react";
+import { Building, Users, AlertCircle, CreditCard, Activity, PlusCircle, MessageSquare, Zap, UserPlus } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
@@ -28,7 +29,17 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const PIE_COLORS = ["#f97316", "#eab308", "#ef4444", "#22c55e", "#3b82f6", "#8b5cf6", "#6b7280"];
 
+const QUICK_ACTIONS = [
+  { label: "Log Issue", icon: PlusCircle, href: "/issues", color: "text-amber-600", bg: "bg-amber-50 hover:bg-amber-100 border-amber-200" },
+  { label: "Pre-clear Visitor", icon: Users, href: "/visitors", color: "text-blue-600", bg: "bg-blue-50 hover:bg-blue-100 border-blue-200" },
+  { label: "Generate Charges", icon: Zap, href: "/payments", color: "text-primary", bg: "bg-primary/5 hover:bg-primary/10 border-primary/20" },
+  { label: "Add Resident", icon: UserPlus, href: "/residents", color: "text-green-600", bg: "bg-green-50 hover:bg-green-100 border-green-200" },
+  { label: "New Announcement", icon: MessageSquare, href: "/announcements", color: "text-purple-600", bg: "bg-purple-50 hover:bg-purple-100 border-purple-200" },
+  { label: "View Reports", icon: Building, href: "/reports", color: "text-gray-600", bg: "bg-gray-50 hover:bg-gray-100 border-gray-200" },
+];
+
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary({
     query: { queryKey: getGetDashboardSummaryQueryKey() }
   });
@@ -102,6 +113,27 @@ export default function Dashboard() {
           icon={Users}
         />
       </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {QUICK_ACTIONS.map(action => (
+              <button
+                key={action.href}
+                onClick={() => setLocation(action.href)}
+                className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors cursor-pointer ${action.bg}`}
+              >
+                <action.icon className={`w-5 h-5 ${action.color}`} />
+                <span className={`text-xs font-medium text-center leading-tight ${action.color}`}>{action.label}</span>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
