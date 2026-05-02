@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Users, CheckCircle, LogIn, LogOut, XCircle, Clock } from "lucide-react";
+import { Plus, Users, CheckCircle, LogIn, LogOut, XCircle, Clock, Printer, BadgeCheck } from "lucide-react";
+import { printHtml, today, loadSettings } from "@/lib/print-utils";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -34,6 +35,94 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+function formatTimestamp(ts: string | null | undefined): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  return d.toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function printGatePass(visitor: any, buildingName: string) {
+  const settings = loadSettings();
+  const company = settings.companyName || "Jengo Property Management";
+  const passRef = `GP-${String(visitor.id).padStart(4, "0")}`;
+  const statusLabel = visitor.status.replace("_", " ").toUpperCase();
+  const statusColour = visitor.status === "checked_in" ? "#16a34a" : visitor.status === "approved" ? "#1d4ed8" : "#92400e";
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Gate Pass — ${visitor.visitorName}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a1a; background: #fff; padding: 32px; max-width: 480px; margin: 0 auto; }
+  .brand { font-size: 22px; font-weight: 700; color: #c2410c; }
+  .sub { font-size: 11px; color: #666; margin-top: 2px; }
+  .divider { border: none; border-top: 2px solid #e5e7eb; margin: 16px 0; }
+  .pass-header { text-align: center; margin: 20px 0 16px; }
+  .pass-title { font-size: 18px; font-weight: 700; letter-spacing: 2px; color: #111; text-transform: uppercase; }
+  .pass-ref { font-size: 12px; color: #666; margin-top: 4px; }
+  .status-badge { display: inline-block; padding: 5px 18px; border-radius: 6px; font-weight: 700; font-size: 13px; letter-spacing: 1px; color: ${statusColour}; border: 2px solid ${statusColour}; margin-top: 10px; }
+  .section { background: #f9fafb; border-radius: 8px; padding: 14px 16px; margin: 14px 0; }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; padding: 5px 0; border-bottom: 1px solid #e5e7eb; }
+  .row:last-child { border-bottom: none; }
+  .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; min-width: 110px; }
+  .value { font-size: 13px; font-weight: 600; text-align: right; }
+  .sig-section { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .sig-box { border-top: 1.5px solid #374151; padding-top: 6px; }
+  .sig-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+  .footer { margin-top: 28px; text-align: center; font-size: 10px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+  .watermark { text-align: center; font-size: 11px; font-weight: 600; color: #d1d5db; letter-spacing: 4px; text-transform: uppercase; margin: 14px 0; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+  <div class="brand">${company}</div>
+  <div class="sub">Visitor Gate Pass</div>
+  <hr class="divider"/>
+
+  <div class="pass-header">
+    <div class="pass-title">Gate Pass</div>
+    <div class="pass-ref">Reference: ${passRef} &nbsp;|&nbsp; Issued: ${today()}</div>
+    <div><span class="status-badge">${statusLabel}</span></div>
+  </div>
+
+  <div class="section">
+    <div class="row"><span class="label">Visitor Name</span><span class="value">${visitor.visitorName}</span></div>
+    ${visitor.visitorIdNumber ? `<div class="row"><span class="label">ID / Passport</span><span class="value">${visitor.visitorIdNumber}</span></div>` : ""}
+    ${visitor.visitorPhone ? `<div class="row"><span class="label">Phone</span><span class="value">${visitor.visitorPhone}</span></div>` : ""}
+    <div class="row"><span class="label">Purpose</span><span class="value">${visitor.purpose || "Not specified"}</span></div>
+  </div>
+
+  <div class="section">
+    <div class="row"><span class="label">Building</span><span class="value">${buildingName}</span></div>
+    <div class="row"><span class="label">Expected Date</span><span class="value">${visitor.expectedDate}</span></div>
+    ${visitor.expectedTime ? `<div class="row"><span class="label">Expected Time</span><span class="value">${visitor.expectedTime}</span></div>` : ""}
+    ${visitor.checkInTime ? `<div class="row"><span class="label">Checked In</span><span class="value">${formatTimestamp(visitor.checkInTime)}</span></div>` : ""}
+    ${visitor.checkOutTime ? `<div class="row"><span class="label">Checked Out</span><span class="value">${formatTimestamp(visitor.checkOutTime)}</span></div>` : ""}
+  </div>
+
+  <div class="watermark">✦ &nbsp; Authorised Access &nbsp; ✦</div>
+
+  <div class="sig-section">
+    <div class="sig-box">
+      <div class="sig-label">Security Officer</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-label">Management</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    This gate pass is valid for one entry only and must be surrendered at the gate upon exit.<br/>
+    Computer generated — ${company}
+  </div>
+</body>
+</html>`;
+
+  printHtml(html);
+}
+
 function NewVisitorDialog() {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
@@ -49,7 +138,7 @@ function NewVisitorDialog() {
     createVisitor.mutate(
       { data: data as any },
       {
-        onSuccess: (visitor) => {
+        onSuccess: () => {
           qc.invalidateQueries({ queryKey: getListVisitorsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetTodayVisitorsQueryKey({ buildingId: data.buildingId }) });
           setOpen(false);
@@ -153,6 +242,9 @@ export default function Visitors() {
   );
   const updateVisitor = useUpdateVisitor();
 
+  const buildingMap = Object.fromEntries((buildings ?? []).map(b => [b.id, b.name]));
+  const currentBuildingName = buildingMap[selectedBuilding] ?? "Building";
+
   const handleStatusChange = (id: number, status: string) => {
     const updates: Record<string, unknown> = { status };
     if (status === "checked_in") updates.checkInTime = new Date().toISOString();
@@ -213,7 +305,7 @@ export default function Visitors() {
       {/* Visitor list */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All Visitors</CardTitle>
+          <CardTitle className="text-base">All Visitors — {currentBuildingName}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -232,15 +324,40 @@ export default function Visitors() {
                       <span className={`text-xs px-2 py-0.5 rounded border font-medium ${STATUS_COLORS[visitor.status]}`}>
                         {visitor.status.replace("_", " ")}
                       </span>
+                      {visitor.status === "checked_in" && (
+                        <span className="flex items-center gap-1 text-xs text-green-700">
+                          <BadgeCheck className="w-3 h-3" />
+                          In premises
+                        </span>
+                      )}
                     </div>
                     <p className="font-semibold text-foreground">{visitor.visitorName}</p>
-                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-0.5">
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
                       {visitor.visitorPhone && <span>{visitor.visitorPhone}</span>}
+                      {visitor.visitorIdNumber && <span className="font-medium text-foreground/70">ID: {visitor.visitorIdNumber}</span>}
                       {visitor.purpose && <span>{visitor.purpose}</span>}
-                      <span>{visitor.expectedDate} {visitor.expectedTime && `at ${visitor.expectedTime}`}</span>
+                      <span>{visitor.expectedDate}{visitor.expectedTime ? ` at ${visitor.expectedTime}` : ""}</span>
+                      {visitor.checkInTime && (
+                        <span className="text-green-700">In: {formatTimestamp(visitor.checkInTime)}</span>
+                      )}
+                      {visitor.checkOutTime && (
+                        <span className="text-gray-500">Out: {formatTimestamp(visitor.checkOutTime)}</span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {(visitor.status === "approved" || visitor.status === "checked_in" || visitor.status === "checked_out") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 text-muted-foreground"
+                        onClick={() => printGatePass(visitor, currentBuildingName)}
+                        data-testid={`button-gate-pass-${visitor.id}`}
+                      >
+                        <Printer className="w-3 h-3" />
+                        Gate Pass
+                      </Button>
+                    )}
                     {visitor.status === "pending" && (
                       <Button size="sm" variant="outline" onClick={() => handleStatusChange(visitor.id, "approved")} data-testid={`button-approve-${visitor.id}`}>
                         Approve
