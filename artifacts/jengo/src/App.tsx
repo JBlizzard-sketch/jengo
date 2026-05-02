@@ -24,6 +24,7 @@ import ResidentDetail from "@/pages/residents/[id]";
 import Reports from "@/pages/reports";
 import UnitLedger from "@/pages/buildings/unit-ledger";
 import Settings from "@/pages/settings";
+import Expenses from "@/pages/expenses";
 
 import GatePage from "@/pages/gate/index";
 import PortalLogin from "@/pages/portal/login";
@@ -110,6 +111,7 @@ function Router() {
               <Route path="/buildings/:buildingId/units/:unitId" component={UnitLedger} />
               <Route path="/payments" component={Payments} />
               <Route path="/reports" component={Reports} />
+              <Route path="/expenses" component={Expenses} />
               <Route path="/settings" component={Settings} />
               <Route path="/contractors/jobs/:id" component={JobDetail} />
               <Route path="/contractors" component={Contractors} />
