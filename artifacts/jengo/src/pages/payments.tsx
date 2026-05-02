@@ -3,13 +3,14 @@ import {
   useListPayments, useGetPaymentsSummary, useUpdatePayment, useListBuildings,
   getListPaymentsQueryKey, getGetPaymentsSummaryQueryKey, getListBuildingsQueryKey
 } from "@workspace/api-client-react";
+import { useMutation } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck } from "lucide-react";
+import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -95,10 +96,127 @@ function RecordPaymentDialog({ payment, onClose }: { payment: any; onClose: () =
   );
 }
 
+function GenerateChargesDialog({ buildings, onClose }: { buildings: any[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [buildingId, setBuildingId] = useState("");
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(28);
+    return d.toISOString().split("T")[0];
+  });
+  const [overrideAmount, setOverrideAmount] = useState("");
+  const [result, setResult] = useState<any>(null);
+
+  const generate = useMutation({
+    mutationFn: async () => {
+      const body: any = { buildingId: Number(buildingId), month, dueDate };
+      if (overrideAmount) body.overrideAmount = Number(overrideAmount);
+      const res = await fetch("/api/payments/bulk-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.error ?? "Failed to generate charges");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      qc.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetPaymentsSummaryQueryKey() });
+    },
+  });
+
+  const selectedBuilding = buildings.find(b => String(b.id) === buildingId);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-primary" />
+            Generate Monthly Charges
+          </DialogTitle>
+        </DialogHeader>
+        {result ? (
+          <div className="space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+              <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+              <p className="font-semibold text-green-800">Charges Generated!</p>
+              <p className="text-sm text-green-700 mt-1">{result.created} records for {result.building}</p>
+              <p className="text-xs text-green-600 mt-0.5">Total: KES {Number(result.totalAmount).toLocaleString()}</p>
+            </div>
+            <Button className="w-full" onClick={onClose}>Done</Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Building *</label>
+              <Select value={buildingId} onValueChange={setBuildingId}>
+                <SelectTrigger data-testid="select-building"><SelectValue placeholder="Select building" /></SelectTrigger>
+                <SelectContent>
+                  {buildings.map(b => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.name} — KES {Number(b.serviceChargeAmount ?? 0).toLocaleString()}/mo
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Month *</label>
+              <Input type="month" value={month} onChange={e => setMonth(e.target.value)} data-testid="input-month" />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Due Date *</label>
+              <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} data-testid="input-due-date" />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">
+                Override Amount (KES)
+                {selectedBuilding?.serviceChargeAmount && (
+                  <span className="text-muted-foreground font-normal ml-1">
+                    — default: {Number(selectedBuilding.serviceChargeAmount).toLocaleString()}
+                  </span>
+                )}
+              </label>
+              <Input
+                type="number"
+                placeholder={selectedBuilding?.serviceChargeAmount ? String(Number(selectedBuilding.serviceChargeAmount)) : "Use building default"}
+                value={overrideAmount}
+                onChange={e => setOverrideAmount(e.target.value)}
+                data-testid="input-override-amount"
+              />
+            </div>
+            {generate.error && (
+              <p className="text-sm text-destructive">{(generate.error as Error).message}</p>
+            )}
+            <Button
+              className="w-full"
+              onClick={() => generate.mutate()}
+              disabled={!buildingId || !month || !dueDate || generate.isPending}
+              data-testid="button-generate"
+            >
+              {generate.isPending ? "Generating..." : "Generate Charges"}
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Payments() {
   const [selectedBuilding, setSelectedBuilding] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [recordingPayment, setRecordingPayment] = useState<any>(null);
+  const [generatingCharges, setGeneratingCharges] = useState(false);
   const qc = useQueryClient();
   const updatePayment = useUpdatePayment();
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
@@ -118,9 +236,15 @@ export default function Payments() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Service Charges</h1>
-        <p className="text-muted-foreground">Track and record payment collections</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Service Charges</h1>
+          <p className="text-muted-foreground">Track and record payment collections</p>
+        </div>
+        <Button className="gap-2" onClick={() => setGeneratingCharges(true)} data-testid="button-generate-charges">
+          <Zap className="w-4 h-4" />
+          Generate Charges
+        </Button>
       </div>
 
       {/* Summary */}
@@ -257,6 +381,9 @@ export default function Payments() {
 
       {recordingPayment && (
         <RecordPaymentDialog payment={recordingPayment} onClose={() => setRecordingPayment(null)} />
+      )}
+      {generatingCharges && buildings && (
+        <GenerateChargesDialog buildings={buildings} onClose={() => setGeneratingCharges(false)} />
       )}
     </div>
   );

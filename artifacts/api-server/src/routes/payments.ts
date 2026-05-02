@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { paymentsTable } from "@workspace/db";
+import { paymentsTable, residentsTable, buildingsTable } from "@workspace/db";
 import { eq, and, sum, count } from "drizzle-orm";
+import { z } from "zod";
 import {
   CreatePaymentBody, UpdatePaymentBody,
   ListPaymentsQueryParams, GetPaymentsSummaryQueryParams,
@@ -79,4 +80,49 @@ paymentsRouter.patch("/:id", async (req, res) => {
   const [payment] = await db.update(paymentsTable).set(updates).where(eq(paymentsTable.id, id)).returning();
   if (!payment) return res.status(404).json({ message: "Not found" });
   res.json({ ...payment, amount: Number(payment.amount), currency: payment.currency ?? "KES" });
+});
+
+// POST /api/payments/bulk-generate — generate monthly service charges for all active residents in a building
+paymentsRouter.post("/bulk-generate", async (req, res) => {
+  const body = z.object({
+    buildingId: z.coerce.number(),
+    month: z.string().regex(/^\d{4}-\d{2}$/, "Format: YYYY-MM"),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format: YYYY-MM-DD"),
+    description: z.string().optional(),
+    overrideAmount: z.coerce.number().optional(),
+  }).parse(req.body);
+
+  const [building] = await db.select().from(buildingsTable).where(eq(buildingsTable.id, body.buildingId));
+  if (!building) { res.status(404).json({ error: "Building not found" }); return; }
+
+  const amount = body.overrideAmount ?? Number(building.serviceChargeAmount ?? 0);
+  if (!amount) { res.status(400).json({ error: "No service charge amount set for this building" }); return; }
+
+  const monthLabel = new Date(body.month + "-01").toLocaleString("en-KE", { month: "long", year: "numeric" });
+  const description = body.description ?? `Service Charge - ${monthLabel}`;
+
+  const residents = await db.select().from(residentsTable)
+    .where(and(eq(residentsTable.buildingId, body.buildingId), eq(residentsTable.status, "active")));
+
+  if (!residents.length) { res.status(400).json({ error: "No active residents found in this building" }); return; }
+
+  const records = residents.map(r => ({
+    buildingId: body.buildingId,
+    unitId: r.unitId,
+    residentId: r.id,
+    description,
+    amount: amount.toString(),
+    dueDate: body.dueDate,
+    month: body.month,
+    status: "pending" as const,
+  }));
+
+  const created = await db.insert(paymentsTable).values(records).returning();
+  res.status(201).json({
+    created: created.length,
+    totalAmount: amount * created.length,
+    month: body.month,
+    building: building.name,
+    payments: created.map(p => ({ ...p, amount: Number(p.amount), currency: p.currency ?? "KES" })),
+  });
 });

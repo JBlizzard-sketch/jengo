@@ -65,6 +65,15 @@ All routes under `/api`:
 - `POST /api/auth/logout` — destroy session
 - `GET /api/auth/me` — return current resident session
 
+### Gate Security Terminal (Phase 4)
+- `POST /api/gate/auth` — guard logs in with PIN (default: `1234`, set `GATE_PIN` env var to override)
+- `GET /api/gate/me` — check gate session
+- `POST /api/gate/logout` — lock terminal
+- `GET /api/gate/visitors` — today's visitors across all buildings with unit/resident/building info
+- `PATCH /api/gate/visitors/:id/checkin` — check a visitor in (sets `checked_in` + timestamp)
+- `PATCH /api/gate/visitors/:id/checkout` — check out (sets `checked_out` + timestamp)
+- `PATCH /api/gate/visitors/:id/deny` — deny entry
+
 ### Portal (resident-scoped, Phase 2 + 3)
 - `GET /api/portal/home` — dashboard data (unit, building, stats, recent issues/payments/announcements)
 - `GET /api/portal/issues` — resident's own issues

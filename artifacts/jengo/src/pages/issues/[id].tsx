@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
-  useGetIssue, useUpdateIssue, useListIssueComments, useAddIssueComment,
-  getGetIssueQueryKey, getListIssueCommentsQueryKey
+  useGetIssue, useUpdateIssue, useListIssueComments, useAddIssueComment, useListContractors,
+  getGetIssueQueryKey, getListIssueCommentsQueryKey, getListContractorsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, CheckCircle, Clock, AlertCircle, Paperclip, MessageSquare } from "lucide-react";
+import { ArrowLeft, CheckCircle, Clock, Wrench, Paperclip, MessageSquare } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-red-100 text-red-700 border-red-200",
@@ -40,6 +40,7 @@ export default function IssueDetail() {
 
   const { data: issue, isLoading } = useGetIssue(id, { query: { queryKey: getGetIssueQueryKey(id), enabled: !!id } });
   const { data: comments } = useListIssueComments(id, { query: { queryKey: getListIssueCommentsQueryKey(id), enabled: !!id } });
+  const { data: contractors } = useListContractors({ query: { queryKey: getListContractorsQueryKey() } });
   const updateIssue = useUpdateIssue();
   const addComment = useAddIssueComment();
 
@@ -108,12 +109,29 @@ export default function IssueDetail() {
               </a>
             </div>
           )}
-          {issue.assignedTo && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="w-4 h-4" />
-              Assigned to: <span className="font-medium text-foreground">{issue.assignedTo}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 text-sm">
+            <Wrench className="w-4 h-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Assigned to:</span>
+            <Select
+              value={issue.assignedTo ?? "__none__"}
+              onValueChange={val => {
+                updateIssue.mutate(
+                  { id, data: { assignedTo: val === "__none__" ? "" : val } },
+                  { onSuccess: () => qc.invalidateQueries({ queryKey: getGetIssueQueryKey(id) }) }
+                );
+              }}
+            >
+              <SelectTrigger className="h-7 text-sm w-52 border-dashed" data-testid="select-contractor">
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Unassigned</SelectItem>
+                {contractors?.map(c => (
+                  <SelectItem key={c.id} value={c.name}>{c.name}{c.specialty ? ` — ${c.specialty}` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {issue.resolutionNote && (
             <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-sm font-medium text-green-700 mb-1">Resolution Note</p>
