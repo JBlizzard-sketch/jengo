@@ -3,20 +3,38 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Jengo Building Management Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: buildings
+    description: Building management
+  - name: units
+    description: Unit management
+  - name: residents
+    description: Resident management
+  - name: issues
+    description: Issue/complaint management
+  - name: announcements
+    description: Building notice board
+  - name: visitors
+    description: Visitor pre-clearance
+  - name: payments
+    description: Service charge payments
+  - name: contractors
+    description: Contractor and job management
+  - name: dashboard
+    description: Dashboard summaries and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +42,932 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Buildings ──────────────────────────────────────────────────────────────
+  /buildings:
+    get:
+      operationId: listBuildings
+      tags: [buildings]
+      summary: List all buildings
+      responses:
+        "200":
+          description: List of buildings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Building"
+    post:
+      operationId: createBuilding
+      tags: [buildings]
+      summary: Create a building
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBuildingBody"
+      responses:
+        "201":
+          description: Created building
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Building"
+
+  /buildings/{id}:
+    get:
+      operationId: getBuilding
+      tags: [buildings]
+      summary: Get a building
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Building
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Building"
+    patch:
+      operationId: updateBuilding
+      tags: [buildings]
+      summary: Update a building
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBuildingBody"
+      responses:
+        "200":
+          description: Updated building
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Building"
+
+  /buildings/{id}/stats:
+    get:
+      operationId: getBuildingStats
+      tags: [buildings]
+      summary: Get building stats (open issues, overdue payments, occupancy)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Building stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildingStats"
+
+  # ── Units ──────────────────────────────────────────────────────────────────
+  /buildings/{buildingId}/units:
+    get:
+      operationId: listUnits
+      tags: [units]
+      summary: List units in a building
+      parameters:
+        - name: buildingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of units
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Unit"
+    post:
+      operationId: createUnit
+      tags: [units]
+      summary: Create a unit
+      parameters:
+        - name: buildingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUnitBody"
+      responses:
+        "201":
+          description: Created unit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+
+  /units/{id}:
+    get:
+      operationId: getUnit
+      tags: [units]
+      summary: Get a unit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Unit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+    patch:
+      operationId: updateUnit
+      tags: [units]
+      summary: Update a unit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUnitBody"
+      responses:
+        "200":
+          description: Updated unit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+
+  # ── Residents ──────────────────────────────────────────────────────────────
+  /residents:
+    get:
+      operationId: listResidents
+      tags: [residents]
+      summary: List residents
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+        - name: unitId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of residents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resident"
+    post:
+      operationId: createResident
+      tags: [residents]
+      summary: Create a resident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateResidentBody"
+      responses:
+        "201":
+          description: Created resident
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resident"
+
+  /residents/{id}:
+    get:
+      operationId: getResident
+      tags: [residents]
+      summary: Get a resident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resident
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resident"
+    patch:
+      operationId: updateResident
+      tags: [residents]
+      summary: Update a resident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateResidentBody"
+      responses:
+        "200":
+          description: Updated resident
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resident"
+
+  # ── Issues ─────────────────────────────────────────────────────────────────
+  /issues:
+    get:
+      operationId: listIssues
+      tags: [issues]
+      summary: List issues
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, resolved, closed]
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [noise, maintenance, parking, visitor, utility, security, other]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+      responses:
+        "200":
+          description: List of issues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Issue"
+    post:
+      operationId: createIssue
+      tags: [issues]
+      summary: Create an issue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIssueBody"
+      responses:
+        "201":
+          description: Created issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+
+  /issues/{id}:
+    get:
+      operationId: getIssue
+      tags: [issues]
+      summary: Get an issue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+    patch:
+      operationId: updateIssue
+      tags: [issues]
+      summary: Update issue status/resolution
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIssueBody"
+      responses:
+        "200":
+          description: Updated issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+
+  /issues/{id}/comments:
+    get:
+      operationId: listIssueComments
+      tags: [issues]
+      summary: List comments on an issue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IssueComment"
+    post:
+      operationId: addIssueComment
+      tags: [issues]
+      summary: Add a comment to an issue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIssueCommentBody"
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueComment"
+
+  /issues/summary:
+    get:
+      operationId: getIssuesSummary
+      tags: [issues]
+      summary: Get issues summary (counts by status and category)
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Issues summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuesSummary"
+
+  # ── Announcements ──────────────────────────────────────────────────────────
+  /announcements:
+    get:
+      operationId: listAnnouncements
+      tags: [announcements]
+      summary: List announcements
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+        - name: pinned
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Announcement"
+    post:
+      operationId: createAnnouncement
+      tags: [announcements]
+      summary: Create an announcement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnnouncementBody"
+      responses:
+        "201":
+          description: Created announcement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+
+  /announcements/{id}:
+    get:
+      operationId: getAnnouncement
+      tags: [announcements]
+      summary: Get an announcement
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Announcement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+    patch:
+      operationId: updateAnnouncement
+      tags: [announcements]
+      summary: Update an announcement
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAnnouncementBody"
+      responses:
+        "200":
+          description: Updated announcement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+    delete:
+      operationId: deleteAnnouncement
+      tags: [announcements]
+      summary: Delete an announcement
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Visitors ───────────────────────────────────────────────────────────────
+  /visitors:
+    get:
+      operationId: listVisitors
+      tags: [visitors]
+      summary: List visitors
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, checked_in, checked_out, denied]
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of visitors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Visitor"
+    post:
+      operationId: createVisitor
+      tags: [visitors]
+      summary: Pre-clear a visitor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVisitorBody"
+      responses:
+        "201":
+          description: Created visitor clearance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Visitor"
+
+  /visitors/{id}:
+    get:
+      operationId: getVisitor
+      tags: [visitors]
+      summary: Get visitor details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Visitor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Visitor"
+    patch:
+      operationId: updateVisitor
+      tags: [visitors]
+      summary: Update visitor status (check-in, check-out, approve, deny)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVisitorBody"
+      responses:
+        "200":
+          description: Updated visitor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Visitor"
+
+  /visitors/today:
+    get:
+      operationId: getTodayVisitors
+      tags: [visitors]
+      summary: Get today's visitor summary for gate security
+      parameters:
+        - name: buildingId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Today's visitors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodayVisitorsSummary"
+
+  # ── Payments ───────────────────────────────────────────────────────────────
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List service charge payments
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+        - name: unitId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid, overdue, waived]
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: createPayment
+      tags: [payments]
+      summary: Create a payment record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentBody"
+      responses:
+        "201":
+          description: Created payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /payments/{id}:
+    get:
+      operationId: getPayment
+      tags: [payments]
+      summary: Get a payment record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+    patch:
+      operationId: updatePayment
+      tags: [payments]
+      summary: Update payment status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaymentBody"
+      responses:
+        "200":
+          description: Updated payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /payments/summary:
+    get:
+      operationId: getPaymentsSummary
+      tags: [payments]
+      summary: Get payments summary (collected, overdue, outstanding by building)
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payments summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentsSummary"
+
+  # ── Contractors ────────────────────────────────────────────────────────────
+  /contractors:
+    get:
+      operationId: listContractors
+      tags: [contractors]
+      summary: List contractors
+      responses:
+        "200":
+          description: List of contractors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contractor"
+    post:
+      operationId: createContractor
+      tags: [contractors]
+      summary: Create a contractor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContractorBody"
+      responses:
+        "201":
+          description: Created contractor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contractor"
+
+  /contractors/{id}:
+    get:
+      operationId: getContractor
+      tags: [contractors]
+      summary: Get contractor details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contractor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contractor"
+
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [contractors]
+      summary: List contractor jobs
+      parameters:
+        - name: buildingId
+          in: query
+          schema:
+            type: integer
+        - name: contractorId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [quoted, approved, in_progress, completed, disputed]
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+    post:
+      operationId: createJob
+      tags: [contractors]
+      summary: Commission a contractor job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobBody"
+      responses:
+        "201":
+          description: Created job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      tags: [contractors]
+      summary: Get a job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+    patch:
+      operationId: updateJob
+      tags: [contractors]
+      summary: Update job status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobBody"
+      responses:
+        "200":
+          description: Updated job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  # ── Dashboard ──────────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get platform-wide management dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent activity feed across all buildings
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /dashboard/building-scores:
+    get:
+      operationId: getBuildingScores
+      tags: [dashboard]
+      summary: Get building reputation scores (response time, payment rate, issue resolution)
+      responses:
+        "200":
+          description: Building scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BuildingScore"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +975,784 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # ── Building ──
+    Building:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: string
+        neighbourhood:
+          type: string
+          enum: [kilimani, westlands, south_b, lavington, parklands, karen, langata, other]
+        totalUnits:
+          type: integer
+        managementCompany:
+          type: string
+        caretakerName:
+          type: string
+        caretakerPhone:
+          type: string
+        serviceChargeAmount:
+          type: number
+        reputationScore:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, address, neighbourhood, totalUnits, createdAt]
+
+    CreateBuildingBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        neighbourhood:
+          type: string
+          enum: [kilimani, westlands, south_b, lavington, parklands, karen, langata, other]
+        totalUnits:
+          type: integer
+        managementCompany:
+          type: string
+        caretakerName:
+          type: string
+        caretakerPhone:
+          type: string
+        serviceChargeAmount:
+          type: number
+      required: [name, address, neighbourhood, totalUnits]
+
+    UpdateBuildingBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        caretakerName:
+          type: string
+        caretakerPhone:
+          type: string
+        serviceChargeAmount:
+          type: number
+
+    BuildingStats:
+      type: object
+      properties:
+        buildingId:
+          type: integer
+        openIssues:
+          type: integer
+        inProgressIssues:
+          type: integer
+        overduePayments:
+          type: integer
+        occupancyRate:
+          type: number
+        avgResponseTimeHours:
+          type: number
+        activeContractors:
+          type: integer
+        pendingVisitors:
+          type: integer
+      required: [buildingId, openIssues, inProgressIssues, overduePayments, occupancyRate]
+
+    BuildingScore:
+      type: object
+      properties:
+        buildingId:
+          type: integer
+        buildingName:
+          type: string
+        neighbourhood:
+          type: string
+        reputationScore:
+          type: number
+        issueResolutionRate:
+          type: number
+        paymentCollectionRate:
+          type: number
+        avgResponseTimeHours:
+          type: number
+        totalResidents:
+          type: integer
+      required: [buildingId, buildingName, neighbourhood, reputationScore]
+
+    # ── Unit ──
+    Unit:
+      type: object
+      properties:
+        id:
+          type: integer
+        buildingId:
+          type: integer
+        unitNumber:
+          type: string
+        floor:
+          type: integer
+        bedrooms:
+          type: integer
+        status:
+          type: string
+          enum: [occupied, vacant, maintenance]
+        monthlyRent:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, buildingId, unitNumber, status, createdAt]
+
+    CreateUnitBody:
+      type: object
+      properties:
+        unitNumber:
+          type: string
+        floor:
+          type: integer
+        bedrooms:
+          type: integer
+        status:
+          type: string
+          enum: [occupied, vacant, maintenance]
+        monthlyRent:
+          type: number
+      required: [unitNumber, status]
+
+    UpdateUnitBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [occupied, vacant, maintenance]
+        monthlyRent:
+          type: number
+
+    # ── Resident ──
+    Resident:
+      type: object
+      properties:
+        id:
+          type: integer
+        unitId:
+          type: integer
+        buildingId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        moveInDate:
+          type: string
+          format: date
+        isOwner:
+          type: boolean
+        status:
+          type: string
+          enum: [active, inactive, moved_out]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, unitId, buildingId, firstName, lastName, phone, status, createdAt]
+
+    CreateResidentBody:
+      type: object
+      properties:
+        unitId:
+          type: integer
+        buildingId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        moveInDate:
+          type: string
+          format: date
+        isOwner:
+          type: boolean
+      required: [unitId, buildingId, firstName, lastName, phone]
+
+    UpdateResidentBody:
+      type: object
+      properties:
+        email:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, moved_out]
+
+    # ── Issue ──
+    Issue:
+      type: object
+      properties:
+        id:
+          type: integer
+        buildingId:
+          type: integer
+        unitId:
+          type: integer
+        residentId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [noise, maintenance, parking, visitor, utility, security, other]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        evidenceUrl:
+          type: string
+        evidenceType:
+          type: string
+          enum: [photo, audio, video, document]
+        assignedTo:
+          type: string
+        resolutionNote:
+          type: string
+        resolvedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, buildingId, title, category, priority, status, createdAt]
+
+    CreateIssueBody:
+      type: object
+      properties:
+        buildingId:
+          type: integer
+        unitId:
+          type: integer
+        residentId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [noise, maintenance, parking, visitor, utility, security, other]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        evidenceUrl:
+          type: string
+        evidenceType:
+          type: string
+          enum: [photo, audio, video, document]
+      required: [buildingId, title, category, priority]
+
+    UpdateIssueBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        assignedTo:
+          type: string
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        resolutionNote:
+          type: string
+
+    IssueComment:
+      type: object
+      properties:
+        id:
+          type: integer
+        issueId:
+          type: integer
+        authorName:
+          type: string
+        authorRole:
+          type: string
+          enum: [resident, management, caretaker, security]
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, issueId, authorName, authorRole, content, createdAt]
+
+    CreateIssueCommentBody:
+      type: object
+      properties:
+        authorName:
+          type: string
+        authorRole:
+          type: string
+          enum: [resident, management, caretaker, security]
+        content:
+          type: string
+      required: [authorName, authorRole, content]
+
+    IssuesSummary:
+      type: object
+      properties:
+        totalOpen:
+          type: integer
+        totalInProgress:
+          type: integer
+        totalResolved:
+          type: integer
+        byCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              count:
+                type: integer
+            required: [category, count]
+        byPriority:
+          type: array
+          items:
+            type: object
+            properties:
+              priority:
+                type: string
+              count:
+                type: integer
+            required: [priority, count]
+        avgResolutionHours:
+          type: number
+      required: [totalOpen, totalInProgress, totalResolved, byCategory, byPriority]
+
+    # ── Announcement ──
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: integer
+        buildingId:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        category:
+          type: string
+          enum: [general, maintenance, utility, emergency, event, agm]
+        isPinned:
+          type: boolean
+        authorName:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, buildingId, title, content, category, isPinned, createdAt]
+
+    CreateAnnouncementBody:
+      type: object
+      properties:
+        buildingId:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        category:
+          type: string
+          enum: [general, maintenance, utility, emergency, event, agm]
+        isPinned:
+          type: boolean
+        authorName:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required: [buildingId, title, content, category]
+
+    UpdateAnnouncementBody:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        isPinned:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+
+    # ── Visitor ──
+    Visitor:
+      type: object
+      properties:
+        id:
+          type: integer
+        buildingId:
+          type: integer
+        unitId:
+          type: integer
+        residentId:
+          type: integer
+        visitorName:
+          type: string
+        visitorPhone:
+          type: string
+        visitorIdNumber:
+          type: string
+        purpose:
+          type: string
+        expectedDate:
+          type: string
+          format: date
+        expectedTime:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, checked_in, checked_out, denied]
+        checkInTime:
+          type: string
+          format: date-time
+        checkOutTime:
+          type: string
+          format: date-time
+        securityNote:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, buildingId, visitorName, expectedDate, status, createdAt]
+
+    CreateVisitorBody:
+      type: object
+      properties:
+        buildingId:
+          type: integer
+        unitId:
+          type: integer
+        residentId:
+          type: integer
+        visitorName:
+          type: string
+        visitorPhone:
+          type: string
+        visitorIdNumber:
+          type: string
+        purpose:
+          type: string
+        expectedDate:
+          type: string
+          format: date
+        expectedTime:
+          type: string
+      required: [buildingId, visitorName, expectedDate]
+
+    UpdateVisitorBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, approved, checked_in, checked_out, denied]
+        securityNote:
+          type: string
+        checkInTime:
+          type: string
+          format: date-time
+        checkOutTime:
+          type: string
+          format: date-time
+
+    TodayVisitorsSummary:
+      type: object
+      properties:
+        expected:
+          type: integer
+        checkedIn:
+          type: integer
+        checkedOut:
+          type: integer
+        pending:
+          type: integer
+        denied:
+          type: integer
+        visitors:
+          type: array
+          items:
+            $ref: "#/components/schemas/Visitor"
+      required: [expected, checkedIn, checkedOut, pending, denied, visitors]
+
+    # ── Payment ──
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        buildingId:
+          type: integer
+        unitId:
+          type: integer
+        residentId:
+          type: integer
+        description:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+          default: KES
+        dueDate:
+          type: string
+          format: date
+        paidDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [pending, paid, overdue, waived]
+        paymentMethod:
+          type: string
+          enum: [mpesa, bank_transfer, cash, other]
+        mpesaRef:
+          type: string
+        month:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, buildingId, unitId, description, amount, dueDate, status, createdAt]
+
+    CreatePaymentBody:
+      type: object
+      properties:
+        buildingId:
+          type: integer
+        unitId:
+          type: integer
+        residentId:
+          type: integer
+        description:
+          type: string
+        amount:
+          type: number
+        dueDate:
+          type: string
+          format: date
+        month:
+          type: string
+      required: [buildingId, unitId, description, amount, dueDate]
+
+    UpdatePaymentBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, paid, overdue, waived]
+        paidDate:
+          type: string
+          format: date
+        paymentMethod:
+          type: string
+          enum: [mpesa, bank_transfer, cash, other]
+        mpesaRef:
+          type: string
+
+    PaymentsSummary:
+      type: object
+      properties:
+        totalCollected:
+          type: number
+        totalOutstanding:
+          type: number
+        totalOverdue:
+          type: number
+        collectionRate:
+          type: number
+        overdueCount:
+          type: integer
+        paidCount:
+          type: integer
+        pendingCount:
+          type: integer
+      required: [totalCollected, totalOutstanding, totalOverdue, collectionRate, overdueCount, paidCount, pendingCount]
+
+    # ── Contractor ──
+    Contractor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        company:
+          type: string
+        trade:
+          type: string
+          enum: [plumbing, electrical, carpentry, painting, cleaning, security, landscaping, general, other]
+        phone:
+          type: string
+        email:
+          type: string
+        rating:
+          type: number
+        totalJobs:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, trade, phone, createdAt]
+
+    CreateContractorBody:
+      type: object
+      properties:
+        name:
+          type: string
+        company:
+          type: string
+        trade:
+          type: string
+          enum: [plumbing, electrical, carpentry, painting, cleaning, security, landscaping, general, other]
+        phone:
+          type: string
+        email:
+          type: string
+      required: [name, trade, phone]
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: integer
+        buildingId:
+          type: integer
+        contractorId:
+          type: integer
+        issueId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [quoted, approved, in_progress, completed, disputed]
+        quotedAmount:
+          type: number
+        finalAmount:
+          type: number
+        scheduledDate:
+          type: string
+          format: date
+        completedDate:
+          type: string
+          format: date
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, buildingId, contractorId, title, status, createdAt]
+
+    CreateJobBody:
+      type: object
+      properties:
+        buildingId:
+          type: integer
+        contractorId:
+          type: integer
+        issueId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        quotedAmount:
+          type: number
+        scheduledDate:
+          type: string
+          format: date
+      required: [buildingId, contractorId, title]
+
+    UpdateJobBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [quoted, approved, in_progress, completed, disputed]
+        finalAmount:
+          type: number
+        completedDate:
+          type: string
+          format: date
+        notes:
+          type: string
+
+    # ── Dashboard ──
+    DashboardSummary:
+      type: object
+      properties:
+        totalBuildings:
+          type: integer
+        totalResidents:
+          type: integer
+        totalUnits:
+          type: integer
+        openIssues:
+          type: integer
+        overduePayments:
+          type: integer
+        activeJobs:
+          type: integer
+        visitorsToday:
+          type: integer
+        collectionRateThisMonth:
+          type: number
+        issueResolutionRate:
+          type: number
+        avgResponseTimeHours:
+          type: number
+      required: [totalBuildings, totalResidents, totalUnits, openIssues, overduePayments, activeJobs, visitorsToday, collectionRateThisMonth, issueResolutionRate, avgResponseTimeHours]
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [issue_created, issue_resolved, payment_received, visitor_checked_in, announcement_posted, job_completed, resident_added]
+        title:
+          type: string
+        description:
+          type: string
+        buildingName:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+      required: [id, type, title, buildingName, timestamp]

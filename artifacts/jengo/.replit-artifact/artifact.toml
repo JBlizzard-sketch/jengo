@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Jengo — Building Management Platform"
+version = "1.0.0"
+id = "artifacts/jengo"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25552
+
+[services.development]
+run = "pnpm --filter @workspace/jengo run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jengo", "run", "build" ]
+publicDir = "artifacts/jengo/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25552"
+BASE_PATH = "/"
