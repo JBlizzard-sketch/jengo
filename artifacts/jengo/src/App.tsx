@@ -18,6 +18,7 @@ import Announcements from "@/pages/announcements";
 import Visitors from "@/pages/visitors";
 import Payments from "@/pages/payments";
 import Contractors from "@/pages/contractors";
+import Residents from "@/pages/residents/index";
 
 import GatePage from "@/pages/gate/index";
 import PortalLogin from "@/pages/portal/login";
@@ -90,6 +91,7 @@ function Router() {
               <Route path="/" component={Dashboard} />
               <Route path="/buildings" component={Buildings} />
               <Route path="/buildings/:id" component={BuildingDetail} />
+              <Route path="/residents" component={Residents} />
               <Route path="/issues/new" component={NewIssue} />
               <Route path="/issues/:id" component={IssueDetail} />
               <Route path="/issues" component={Issues} />

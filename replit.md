@@ -65,6 +65,12 @@ All routes under `/api`:
 - `POST /api/auth/logout` — destroy session
 - `GET /api/auth/me` — return current resident session
 
+### Platform Administration (Phase 6)
+- Buildings list — "Add Building" button opens full creation dialog (name, address, neighbourhood, units, service charge, caretaker)
+- Building Detail — "Edit" button opens edit dialog (update name, address, caretaker, service charge)
+- Building Detail → Units tab — "Add Unit" button opens creation dialog (unit number, floor, bedrooms, status, monthly rent)
+- Global Search palette (Ctrl/Cmd+K or Search bar in sidebar) — searches buildings, residents, and issues live; keyboard navigable (↑↓ + Enter)
+
 ### Analytics & Operations (Phase 5)
 - Dashboard now shows 3 recharts charts: Issues by Category (donut), Payment Collection (bar), Building Scores (horizontal bar)
 - `POST /api/payments/bulk-generate` — generate monthly service charges for all active residents in a building (buildingId, month YYYY-MM, dueDate, optional overrideAmount)

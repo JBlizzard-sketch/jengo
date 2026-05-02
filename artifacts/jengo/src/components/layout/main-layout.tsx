@@ -6,6 +6,7 @@ import {
   AlertCircle,
   Megaphone,
   Users,
+  UserRound,
   CreditCard,
   Wrench,
   Menu,
@@ -46,6 +47,7 @@ function SidebarNav({
   const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, badge: 0 },
     { href: "/buildings", label: "Buildings", icon: Building, badge: 0 },
+    { href: "/residents", label: "Residents", icon: UserRound, badge: 0 },
     {
       href: "/issues",
       label: "Issues",

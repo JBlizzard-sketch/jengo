@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap } from "lucide-react";
+import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -212,6 +212,32 @@ function GenerateChargesDialog({ buildings, onClose }: { buildings: any[]; onClo
   );
 }
 
+function exportCSV(payments: any[], buildings: any[]) {
+  const buildingMap = Object.fromEntries((buildings ?? []).map(b => [b.id, b.name]));
+  const rows = [
+    ["Month", "Description", "Amount (KES)", "Status", "Due Date", "Paid Date", "Payment Method", "M-Pesa Ref", "Building"],
+    ...(payments ?? []).map(p => [
+      p.month ?? "",
+      p.description ?? "",
+      Number(p.amount).toFixed(2),
+      p.status,
+      p.dueDate ?? "",
+      p.paidDate ?? "",
+      p.paymentMethod ?? "",
+      p.mpesaRef ?? "",
+      buildingMap[p.buildingId] ?? String(p.buildingId),
+    ]),
+  ];
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `jengo-payments-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function Payments() {
   const [selectedBuilding, setSelectedBuilding] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -241,10 +267,22 @@ export default function Payments() {
           <h1 className="text-3xl font-bold text-foreground">Service Charges</h1>
           <p className="text-muted-foreground">Track and record payment collections</p>
         </div>
-        <Button className="gap-2" onClick={() => setGeneratingCharges(true)} data-testid="button-generate-charges">
-          <Zap className="w-4 h-4" />
-          Generate Charges
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => exportCSV(payments ?? [], buildings ?? [])}
+            disabled={!payments?.length}
+            data-testid="button-export-csv"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+          <Button className="gap-2" onClick={() => setGeneratingCharges(true)} data-testid="button-generate-charges">
+            <Zap className="w-4 h-4" />
+            Generate Charges
+          </Button>
+        </div>
       </div>
 
       {/* Summary */}
