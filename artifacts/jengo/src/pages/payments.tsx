@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download, AlertOctagon, Search } from "lucide-react";
+import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download, AlertOctagon, Search, Upload, X, CheckCircle2 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -212,6 +212,151 @@ function GenerateChargesDialog({ buildings, onClose }: { buildings: any[]; onClo
   );
 }
 
+function parseCsvRows(text: string): Record<string, string>[] {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, "").toLowerCase().replace(/\s+/g, "_"));
+  return lines.slice(1).map(line => {
+    const vals = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g) ?? [];
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = (vals[i] ?? "").replace(/^"|"$/g, "").trim(); });
+    return row;
+  });
+}
+
+function CsvImportDialog({ payments, residents, onClose }: { payments: any[]; residents: any[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const updatePayment = useUpdatePayment();
+  const [step, setStep] = useState<"upload" | "preview" | "done">("upload");
+  const [rows, setRows] = useState<Array<{ phone: string; ref: string; date: string; amount?: string }>>([]);
+  const [matches, setMatches] = useState<Array<{ row: any; payment: any | null; resident: any | null; reason?: string }>>([]);
+  const [processing, setProcessing] = useState(false);
+  const [doneCount, setDoneCount] = useState(0);
+
+  const phoneMap = Object.fromEntries(residents.map(r => [r.phone?.replace(/\s/g, ""), r]));
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const parsed = parseCsvRows(text);
+      const normalised = parsed.map(r => ({
+        phone: (r.phone ?? r.resident_phone ?? "").replace(/\s/g, ""),
+        ref: r.mpesa_ref ?? r.reference ?? r.ref ?? r.mpesa ?? "",
+        date: r.date ?? r.paid_date ?? r.payment_date ?? new Date().toISOString().split("T")[0],
+        amount: r.amount ?? "",
+      }));
+      setRows(normalised);
+      const matched = normalised.map(row => {
+        const resident = phoneMap[row.phone] ?? null;
+        if (!resident) return { row, payment: null, resident: null, reason: "No resident with this phone" };
+        const pending = payments.find(p =>
+          p.residentId === resident.id && (p.status === "pending" || p.status === "overdue")
+        ) ?? null;
+        if (!pending) return { row, payment: null, resident, reason: "No outstanding payment for this resident" };
+        return { row, payment: pending, resident, reason: undefined };
+      });
+      setMatches(matched);
+      setStep("preview");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirm = async () => {
+    setProcessing(true);
+    let count = 0;
+    for (const m of matches) {
+      if (!m.payment) continue;
+      await new Promise<void>((resolve) => {
+        updatePayment.mutate(
+          { id: m.payment.id, data: { status: "paid", paymentMethod: "mpesa", paidDate: m.row.date, mpesaRef: m.row.ref || undefined } },
+          { onSuccess: () => { count++; resolve(); }, onError: () => resolve() }
+        );
+      });
+    }
+    setDoneCount(count);
+    qc.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetPaymentsSummaryQueryKey() });
+    setStep("done");
+    setProcessing(false);
+  };
+
+  const matchedCount = matches.filter(m => m.payment).length;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="w-4 h-4" />
+            Import M-Pesa Payments (CSV)
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === "upload" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-dashed border-border p-6 text-center space-y-2">
+              <Upload className="w-8 h-8 text-muted-foreground mx-auto" />
+              <p className="text-sm font-medium">Upload your M-Pesa statement CSV</p>
+              <p className="text-xs text-muted-foreground">Required columns: <code className="bg-secondary px-1 rounded">phone</code>, <code className="bg-secondary px-1 rounded">mpesa_ref</code>, <code className="bg-secondary px-1 rounded">date</code></p>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleFile}
+                className="text-sm text-muted-foreground file:mr-3 file:text-xs file:font-medium file:border file:rounded file:px-2 file:py-1 file:border-input file:bg-background hover:file:bg-muted cursor-pointer"
+                data-testid="input-csv-file"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              CSV example header: <span className="font-mono">phone,mpesa_ref,date</span> — each row matches a resident by phone and marks their oldest pending/overdue payment as paid.
+            </p>
+          </div>
+        )}
+
+        {step === "preview" && (
+          <div className="space-y-4">
+            <div className="flex gap-3 text-sm">
+              <span className="flex items-center gap-1 text-green-700"><CheckCircle2 className="w-3.5 h-3.5" />{matchedCount} will be marked paid</span>
+              <span className="flex items-center gap-1 text-muted-foreground"><X className="w-3.5 h-3.5" />{matches.length - matchedCount} unmatched</span>
+            </div>
+            <div className="max-h-64 overflow-y-auto border rounded-lg divide-y divide-border text-sm">
+              {matches.map((m, i) => (
+                <div key={i} className={`flex items-center gap-3 p-3 ${m.payment ? "bg-green-50/40" : "bg-red-50/40"}`} data-testid={`csv-row-${i}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{m.resident ? `${m.resident.firstName} ${m.resident.lastName}` : m.row.phone}</p>
+                    <p className="text-xs text-muted-foreground truncate">{m.reason ?? `Ref: ${m.row.ref} · ${m.row.date}`}</p>
+                  </div>
+                  {m.payment
+                    ? <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                    : <X className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  }
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep("upload")} className="flex-1">Back</Button>
+              <Button onClick={handleConfirm} disabled={processing || matchedCount === 0} className="flex-1" data-testid="button-confirm-import">
+                {processing ? "Importing…" : `Mark ${matchedCount} as Paid`}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "done" && (
+          <div className="py-6 text-center space-y-3">
+            <CheckCircle2 className="w-10 h-10 text-green-600 mx-auto" />
+            <p className="font-semibold text-foreground">Import complete</p>
+            <p className="text-sm text-muted-foreground">{doneCount} payment{doneCount !== 1 ? "s" : ""} marked as paid via M-Pesa.</p>
+            <Button onClick={onClose} className="w-full">Done</Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function exportCSV(payments: any[], buildings: any[]) {
   const buildingMap = Object.fromEntries((buildings ?? []).map(b => [b.id, b.name]));
   const rows = [
@@ -244,6 +389,7 @@ export default function Payments() {
   const [residentSearch, setResidentSearch] = useState("");
   const [recordingPayment, setRecordingPayment] = useState<any>(null);
   const [generatingCharges, setGeneratingCharges] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
   const qc = useQueryClient();
   const updatePayment = useUpdatePayment();
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
@@ -287,6 +433,15 @@ export default function Payments() {
           >
             <Download className="w-4 h-4" />
             Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setImportingCsv(true)}
+            data-testid="button-import-csv"
+          >
+            <Upload className="w-4 h-4" />
+            Import M-Pesa
           </Button>
           <Button
             variant="outline"
@@ -484,6 +639,13 @@ export default function Payments() {
       )}
       {generatingCharges && buildings && (
         <GenerateChargesDialog buildings={buildings} onClose={() => setGeneratingCharges(false)} />
+      )}
+      {importingCsv && (
+        <CsvImportDialog
+          payments={rawPayments ?? []}
+          residents={residents ?? []}
+          onClose={() => setImportingCsv(false)}
+        />
       )}
     </div>
   );

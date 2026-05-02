@@ -160,6 +160,7 @@ export interface Resident {
   email?: string;
   phone: string;
   moveInDate?: string;
+  leaseEndDate?: string;
   isOwner?: boolean;
   status: ResidentStatus;
   createdAt: string;
@@ -173,6 +174,7 @@ export interface CreateResidentBody {
   email?: string;
   phone: string;
   moveInDate?: string;
+  leaseEndDate?: string;
   isOwner?: boolean;
 }
 
@@ -188,6 +190,7 @@ export const UpdateResidentBodyStatus = {
 export interface UpdateResidentBody {
   email?: string;
   phone?: string;
+  leaseEndDate?: string;
   status?: UpdateResidentBodyStatus;
 }
 

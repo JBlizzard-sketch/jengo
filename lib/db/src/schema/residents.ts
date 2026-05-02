@@ -15,6 +15,7 @@ export const residentsTable = pgTable("residents", {
   email: text("email"),
   phone: text("phone").notNull(),
   moveInDate: date("move_in_date"),
+  leaseEndDate: date("lease_end_date"),
   isOwner: boolean("is_owner").default(false),
   status: residentStatusEnum("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -100,7 +100,7 @@ function AddResidentDialog({ buildings, onClose }: { buildings: any[]; onClose: 
   const [buildingId, setBuildingId] = useState<string>("");
   const [form, setForm] = useState({
     firstName: "", lastName: "", phone: "", email: "",
-    unitId: "", moveInDate: new Date().toISOString().split("T")[0], isOwner: false,
+    unitId: "", moveInDate: new Date().toISOString().split("T")[0], leaseEndDate: "", isOwner: false,
   });
 
   const { data: units } = useListUnits(Number(buildingId), {
@@ -122,8 +122,9 @@ function AddResidentDialog({ buildings, onClose }: { buildings: any[]; onClose: 
           phone: form.phone,
           email: form.email || undefined,
           moveInDate: form.moveInDate || undefined,
+          leaseEndDate: form.leaseEndDate || undefined,
           isOwner: form.isOwner,
-        }
+        } as any
       },
       {
         onSuccess: () => {
@@ -179,9 +180,15 @@ function AddResidentDialog({ buildings, onClose }: { buildings: any[]; onClose: 
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="text-xs font-medium mb-1 block">Move-in Date</label>
-            <Input type="date" value={form.moveInDate} onChange={e => set("moveInDate", e.target.value)} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Move-in Date</label>
+              <Input type="date" value={form.moveInDate} onChange={e => set("moveInDate", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Lease End Date</label>
+              <Input type="date" value={form.leaseEndDate} onChange={e => set("leaseEndDate", e.target.value)} />
+            </div>
           </div>
           <label className="flex items-center gap-2 cursor-pointer text-sm">
             <input type="checkbox" checked={form.isOwner} onChange={e => set("isOwner", e.target.checked)} className="rounded" />
@@ -395,6 +402,16 @@ export default function Residents() {
                           Since {new Date(resident.moveInDate).toLocaleDateString("en-KE", { month: "short", year: "numeric" })}
                         </span>
                       )}
+                      {(resident as any).leaseEndDate && (() => {
+                        const days = Math.round((new Date((resident as any).leaseEndDate).getTime() - Date.now()) / 86400000);
+                        const expired = days < 0;
+                        const urgent = days <= 30;
+                        return (
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${expired ? "bg-red-100 text-red-700" : urgent ? "bg-amber-100 text-amber-700" : "bg-secondary text-secondary-foreground"}`}>
+                            {expired ? `Lease expired ${Math.abs(days)}d ago` : days === 0 ? "Lease expires today!" : `Lease ends in ${days}d`}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-4 shrink-0" onClick={e => e.stopPropagation()}>

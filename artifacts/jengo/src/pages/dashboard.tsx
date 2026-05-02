@@ -4,15 +4,19 @@ import {
   useGetBuildingScores,
   useGetIssuesSummary,
   useGetPaymentsSummary,
+  useListResidents,
+  useListBuildings,
   getGetDashboardSummaryQueryKey,
   getGetRecentActivityQueryKey,
   getGetBuildingScoresQueryKey,
   getGetIssuesSummaryQueryKey,
   getGetPaymentsSummaryQueryKey,
+  getListResidentsQueryKey,
+  getListBuildingsQueryKey,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building, Users, AlertCircle, CreditCard, Activity, PlusCircle, MessageSquare, Zap, UserPlus } from "lucide-react";
+import { Building, Users, AlertCircle, CreditCard, Activity, PlusCircle, MessageSquare, Zap, UserPlus, CalendarClock } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
@@ -51,6 +55,20 @@ export default function Dashboard() {
   const { data: scores } = useGetBuildingScores({
     query: { queryKey: getGetBuildingScoresQueryKey() }
   });
+
+  const { data: allResidents } = useListResidents(undefined, {
+    query: { queryKey: getListResidentsQueryKey() }
+  });
+  const { data: buildings } = useListBuildings({
+    query: { queryKey: getListBuildingsQueryKey() }
+  });
+  const buildingNameMap = Object.fromEntries((buildings ?? []).map(b => [b.id, b.name]));
+  const expiringResidents = (allResidents ?? []).filter(r => {
+    const led = (r as any).leaseEndDate;
+    if (!led || r.status !== "active") return false;
+    const days = Math.round((new Date(led).getTime() - Date.now()) / 86400000);
+    return days <= 60;
+  }).sort((a, b) => new Date((a as any).leaseEndDate).getTime() - new Date((b as any).leaseEndDate).getTime());
 
   const { data: issuesSummary } = useGetIssuesSummary(undefined, {
     query: { queryKey: getGetIssuesSummaryQueryKey() }
@@ -237,6 +255,42 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Leases Expiring Soon */}
+      {expiringResidents.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/30">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-amber-600" />
+                Leases Expiring Soon
+              </CardTitle>
+              <span className="text-xs font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                {expiringResidents.length} resident{expiringResidents.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-amber-100">
+              {expiringResidents.map(r => {
+                const days = Math.round((new Date((r as any).leaseEndDate).getTime() - Date.now()) / 86400000);
+                const expired = days < 0;
+                return (
+                  <div key={r.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{r.firstName} {r.lastName}</p>
+                      <p className="text-xs text-muted-foreground">{buildingNameMap[r.buildingId] ?? ""}</p>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${expired ? "bg-red-100 text-red-700" : days <= 14 ? "bg-red-50 text-red-600" : "bg-amber-100 text-amber-700"}`}>
+                      {expired ? `Expired ${Math.abs(days)}d ago` : days === 0 ? "Expires today!" : `${days}d left`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Building performance table + Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

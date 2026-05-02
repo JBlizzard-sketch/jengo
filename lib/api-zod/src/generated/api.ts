@@ -242,6 +242,7 @@ export const ListResidentsResponseItem = zod.object({
   email: zod.string().optional(),
   phone: zod.string(),
   moveInDate: zod.coerce.date().optional(),
+  leaseEndDate: zod.coerce.date().optional(),
   isOwner: zod.boolean().optional(),
   status: zod.enum(["active", "inactive", "moved_out"]),
   createdAt: zod.coerce.date(),
@@ -259,6 +260,7 @@ export const CreateResidentBody = zod.object({
   email: zod.string().optional(),
   phone: zod.string(),
   moveInDate: zod.coerce.date().optional(),
+  leaseEndDate: zod.coerce.date().optional(),
   isOwner: zod.boolean().optional(),
 });
 
@@ -278,6 +280,7 @@ export const GetResidentResponse = zod.object({
   email: zod.string().optional(),
   phone: zod.string(),
   moveInDate: zod.coerce.date().optional(),
+  leaseEndDate: zod.coerce.date().optional(),
   isOwner: zod.boolean().optional(),
   status: zod.enum(["active", "inactive", "moved_out"]),
   createdAt: zod.coerce.date(),
@@ -293,6 +296,7 @@ export const UpdateResidentParams = zod.object({
 export const UpdateResidentBody = zod.object({
   email: zod.string().optional(),
   phone: zod.string().optional(),
+  leaseEndDate: zod.coerce.date().optional(),
   status: zod.enum(["active", "inactive", "moved_out"]).optional(),
 });
 
@@ -305,6 +309,7 @@ export const UpdateResidentResponse = zod.object({
   email: zod.string().optional(),
   phone: zod.string(),
   moveInDate: zod.coerce.date().optional(),
+  leaseEndDate: zod.coerce.date().optional(),
   isOwner: zod.boolean().optional(),
   status: zod.enum(["active", "inactive", "moved_out"]),
   createdAt: zod.coerce.date(),
