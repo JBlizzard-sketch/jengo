@@ -9,3 +9,4 @@ export * from "./contractors";
 export * from "./expenses";
 export * from "./parking";
 export * from "./maintenance-schedule";
+export * from "./water-readings";

@@ -17,6 +17,7 @@ import {
   Receipt,
   ParkingCircle,
   CalendarCheck,
+  Droplets,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -66,6 +67,7 @@ function SidebarNav({
     { href: "/expenses", label: "Expenses", icon: Receipt, badge: 0 },
     { href: "/parking", label: "Parking", icon: ParkingCircle, badge: 0 },
     { href: "/maintenance", label: "Maintenance", icon: CalendarCheck, badge: 0 },
+    { href: "/water", label: "Water Meters", icon: Droplets, badge: 0 },
     { href: "/contractors", label: "Contractors", icon: Wrench, badge: 0 },
     { href: "/settings", label: "Settings", icon: Settings, badge: 0 },
   ];

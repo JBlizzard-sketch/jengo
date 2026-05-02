@@ -15,6 +15,7 @@ import { gateRouter } from "./gate";
 import { expensesRouter } from "./expenses";
 import { parkingRouter } from "./parking";
 import { maintenanceRouter } from "./maintenance";
+import { waterRouter } from "./water";
 
 const router: IRouter = Router();
 
@@ -35,5 +36,6 @@ router.use("/dashboard", dashboardRouter);
 router.use("/expenses", expensesRouter);
 router.use("/parking", parkingRouter);
 router.use("/maintenance", maintenanceRouter);
+router.use("/water", waterRouter);
 
 export default router;
