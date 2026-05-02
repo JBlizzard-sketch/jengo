@@ -62,6 +62,47 @@ residentsRouter.patch("/:id", async (req, res) => {
   return res.json(resident);
 });
 
+// POST /api/residents/:id/lease-renewal — extend lease + optionally update rent
+residentsRouter.post("/:id/lease-renewal", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    newLeaseEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    newMonthlyRent: z.coerce.number().positive().optional(),
+  }).parse(req.body);
+
+  const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, id));
+  if (!resident) { res.status(404).json({ error: "Resident not found" }); return; }
+  if (resident.status !== "active") { res.status(400).json({ error: "Resident is not active" }); return; }
+
+  const previousLeaseEndDate = resident.leaseEndDate;
+
+  const [updatedResident] = await db.update(residentsTable)
+    .set({ leaseEndDate: body.newLeaseEndDate })
+    .where(eq(residentsTable.id, id))
+    .returning();
+
+  let updatedUnit = null;
+  let previousMonthlyRent = null;
+  if (body.newMonthlyRent !== undefined && resident.unitId) {
+    const [currentUnit] = await db.select().from(unitsTable).where(eq(unitsTable.id, resident.unitId));
+    previousMonthlyRent = currentUnit?.monthlyRent ?? null;
+    const [u] = await db.update(unitsTable)
+      .set({ monthlyRent: String(body.newMonthlyRent) })
+      .where(eq(unitsTable.id, resident.unitId))
+      .returning();
+    updatedUnit = u;
+  }
+
+  res.json({
+    resident: updatedResident,
+    unit: updatedUnit,
+    previousLeaseEndDate,
+    newLeaseEndDate: body.newLeaseEndDate,
+    previousMonthlyRent,
+    newMonthlyRent: body.newMonthlyRent ?? null,
+  });
+});
+
 // POST /api/residents/:id/move-out — mark resident inactive + unit vacant
 residentsRouter.post("/:id/move-out", async (req, res) => {
   const id = Number(req.params.id);

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight, CalendarClock, RotateCcw, FileText, CheckCircle2
+  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight, CalendarClock, RotateCcw, FileText, CheckCircle2, RefreshCw, TrendingUp
 } from "lucide-react";
 import { printHtml, formatKES, formatDate, today, loadSettings } from "@/lib/print-utils";
 import { Link } from "wouter";
@@ -40,6 +40,240 @@ const ISSUE_STATUS_COLORS: Record<string, string> = {
 
 function initials(first: string, last: string) {
   return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
+}
+
+function LeaseRenewalDialog({
+  resident,
+  unit,
+  building,
+  onClose,
+}: {
+  resident: any;
+  unit: any;
+  building: any;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const currentRent = Number(unit?.monthlyRent) || 0;
+  const defaultNewDate = (() => {
+    const base = (resident as any).leaseEndDate
+      ? new Date((resident as any).leaseEndDate)
+      : new Date();
+    base.setFullYear(base.getFullYear() + 1);
+    return base.toISOString().split("T")[0];
+  })();
+
+  const [newLeaseEndDate, setNewLeaseEndDate] = useState(defaultNewDate);
+  const [newRentStr, setNewRentStr] = useState(currentRent ? String(currentRent) : "");
+  const [done, setDone] = useState(false);
+  const [renewalResult, setRenewalResult] = useState<any>(null);
+
+  const newRent = Number(newRentStr) || 0;
+  const rentChanged = newRent > 0 && newRent !== currentRent;
+  const rentDiff = newRent - currentRent;
+  const rentPct = currentRent > 0 ? ((rentDiff / currentRent) * 100).toFixed(1) : null;
+
+  const renewal = useMutation({
+    mutationFn: async () => {
+      const body: Record<string, unknown> = { newLeaseEndDate };
+      if (newRent > 0 && rentChanged) body.newMonthlyRent = newRent;
+      const res = await fetch(`/api/residents/${resident.id}/lease-renewal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.error ?? "Failed to process renewal");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setRenewalResult(data);
+      setDone(true);
+      qc.invalidateQueries({ queryKey: getGetResidentQueryKey(resident.id) });
+      qc.invalidateQueries({ queryKey: getListUnitsQueryKey(resident.buildingId) });
+    },
+  });
+
+  const printRenewalLetter = () => {
+    const s = loadSettings();
+    const r = renewalResult;
+    const prevLease = r?.previousLeaseEndDate ? formatDate(r.previousLeaseEndDate) : "N/A";
+    const prevRent = r?.previousMonthlyRent ? `KES ${Number(r.previousMonthlyRent).toLocaleString()}` : null;
+    const newRentFmt = r?.newMonthlyRent ? `KES ${Number(r.newMonthlyRent).toLocaleString()}` : null;
+
+    const html = `
+      <div class="header">
+        <div>
+          <div class="brand">${s.companyName}</div>
+          <div style="font-size:12px;color:#666">${s.companyAddress} · ${s.companyPhone}</div>
+          <h1 style="margin-top:8px">Lease Renewal Addendum</h1>
+          <p style="color:#666;font-size:12px">Ref: RNW-${String(resident.id).padStart(4,"0")}-${Date.now().toString(36).toUpperCase().slice(-4)}</p>
+        </div>
+        <div class="meta">
+          <div style="font-size:11px;color:#888">Date Issued</div>
+          <div style="font-size:12px;font-weight:600">${today()}</div>
+          <div class="stamp" style="margin-top:8px">RENEWED</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px;color:#666;">To:</div>
+        <div style="font-weight:600;">${resident.firstName} ${resident.lastName}</div>
+        <div style="font-size:12px;color:#666;">Unit ${unit?.unitNumber ?? "—"}, ${building?.name ?? "—"}</div>
+        ${resident.phone ? `<div style="font-size:12px;color:#666;">${resident.phone}</div>` : ""}
+        ${resident.email ? `<div style="font-size:12px;color:#666;">${resident.email}</div>` : ""}
+      </div>
+
+      <div class="letter-body">
+        <p>Dear <strong>${resident.firstName} ${resident.lastName}</strong>,</p>
+        <p>We are pleased to confirm the renewal of your tenancy at <strong>Unit ${unit?.unitNumber ?? "—"}</strong>, <strong>${building?.name ?? "—"}</strong> on the following terms:</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="box">
+          <div class="label">Previous Lease End</div>
+          <div class="value">${prevLease}</div>
+        </div>
+        <div class="box">
+          <div class="label">New Lease End Date</div>
+          <div class="value">${formatDate(r?.newLeaseEndDate ?? newLeaseEndDate)}</div>
+        </div>
+        ${prevRent ? `
+        <div class="box">
+          <div class="label">Previous Monthly Rent</div>
+          <div class="value">${prevRent}</div>
+        </div>
+        <div class="box">
+          <div class="label">New Monthly Rent</div>
+          <div class="value" style="color:#15803d">${newRentFmt ?? prevRent}</div>
+        </div>` : `
+        <div class="box">
+          <div class="label">Monthly Rent</div>
+          <div class="value">KES ${currentRent.toLocaleString()} (unchanged)</div>
+        </div>
+        <div></div>`}
+      </div>
+
+      <div class="letter-body">
+        <p>All other terms and conditions of the original tenancy agreement dated <strong>${resident.moveInDate ? formatDate(resident.moveInDate) : "—"}</strong> remain in full force and effect. This addendum supersedes any prior discussions regarding the renewal of the above-mentioned tenancy.</p>
+        <p>Please sign below to acknowledge your acceptance of these renewal terms.</p>
+      </div>
+
+      <div style="margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:48px">
+        <div>
+          <div style="border-top:1px solid #000;padding-top:6px;margin-top:40px">
+            <p style="font-weight:600">Authorised by Landlord / Agent</p>
+            <p style="font-size:12px;color:#666">${s.companyName}</p>
+          </div>
+        </div>
+        <div>
+          <div style="border-top:1px solid #000;padding-top:6px;margin-top:40px">
+            <p style="font-weight:600">Tenant Signature</p>
+            <p style="font-size:12px;color:#666">${resident.firstName} ${resident.lastName}</p>
+            <p style="font-size:11px;color:#888;margin-top:4px">Date: _______________</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>Generated ${today()} by ${s.companyName} · Jengo Building Management Platform</p>
+      </div>
+    `;
+    printHtml(html, `Lease Renewal — ${resident.firstName} ${resident.lastName}`);
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-primary" />
+            Renew Lease — {resident.firstName} {resident.lastName}
+          </DialogTitle>
+        </DialogHeader>
+
+        {!done ? (
+          <div className="space-y-4">
+            <div className="p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground space-y-0.5">
+              <p><span className="font-medium">Unit:</span> {unit?.unitNumber ?? "—"} · {building?.name ?? "—"}</p>
+              {(resident as any).leaseEndDate && (
+                <p><span className="font-medium">Current lease end:</span> {formatDate((resident as any).leaseEndDate)}</p>
+              )}
+              {currentRent > 0 && (
+                <p><span className="font-medium">Current rent:</span> KES {currentRent.toLocaleString()}/mo</p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-xs font-medium mb-1 block">New Lease End Date *</label>
+              <Input
+                type="date"
+                value={newLeaseEndDate}
+                onChange={e => setNewLeaseEndDate(e.target.value)}
+                data-testid="input-new-lease-date"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium mb-1 block">New Monthly Rent — KES (leave blank to keep current)</label>
+              <Input
+                type="number"
+                min="0"
+                placeholder={currentRent ? String(currentRent) : "e.g. 65000"}
+                value={newRentStr}
+                onChange={e => setNewRentStr(e.target.value)}
+                data-testid="input-new-rent"
+              />
+              {rentChanged && (
+                <p className={`text-xs mt-1 font-medium ${rentDiff > 0 ? "text-amber-700" : "text-green-700"}`}>
+                  <TrendingUp className="inline w-3 h-3 mr-1" />
+                  {rentDiff > 0 ? "+" : ""}{rentPct}% — {rentDiff > 0 ? "increase" : "decrease"} of KES {Math.abs(rentDiff).toLocaleString()}/mo
+                </p>
+              )}
+            </div>
+
+            {renewal.error && (
+              <p className="text-sm text-destructive">{(renewal.error as Error).message}</p>
+            )}
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+              <Button
+                className="flex-1"
+                onClick={() => renewal.mutate()}
+                disabled={!newLeaseEndDate || renewal.isPending}
+                data-testid="button-confirm-renewal"
+              >
+                {renewal.isPending ? "Processing..." : "Confirm Renewal"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-2 space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+              <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
+              <p className="font-semibold text-green-800">Lease Renewed</p>
+              <p className="text-sm text-green-700 mt-1">
+                New end date: <strong>{formatDate(renewalResult?.newLeaseEndDate ?? newLeaseEndDate)}</strong>
+              </p>
+              {renewalResult?.newMonthlyRent && (
+                <p className="text-xs text-green-600 mt-0.5">
+                  Rent updated to KES {Number(renewalResult.newMonthlyRent).toLocaleString()}/mo
+                </p>
+              )}
+            </div>
+            <Button variant="outline" className="w-full gap-2" onClick={printRenewalLetter} data-testid="button-print-renewal">
+              <FileText className="w-4 h-4" />
+              Print Renewal Addendum
+            </Button>
+            <Button className="w-full" onClick={onClose}>Done</Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function MoveOutDialog({
@@ -352,6 +586,7 @@ export default function ResidentDetail() {
   const [recordingPaymentId, setRecordingPaymentId] = useState<number | null>(null);
   const [mpesaRef, setMpesaRef] = useState("");
   const [moveOutOpen, setMoveOutOpen] = useState(false);
+  const [renewalOpen, setRenewalOpen] = useState(false);
 
   const handleRecordPayment = (paymentId: number) => {
     updatePayment.mutate(
@@ -535,6 +770,18 @@ export default function ResidentDetail() {
               >
                 <FileText className="w-4 h-4" />
                 Demand Letter
+              </Button>
+            )}
+            {resident.status === "active" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-primary border-primary/30 hover:bg-primary/5"
+                onClick={() => setRenewalOpen(true)}
+                data-testid="button-renew-lease"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Renew Lease
               </Button>
             )}
             {resident.status === "active" && (
@@ -808,6 +1055,14 @@ export default function ResidentDetail() {
             ))}
           </CardContent>
         </Card>
+      )}
+      {renewalOpen && (
+        <LeaseRenewalDialog
+          resident={resident}
+          unit={unit}
+          building={building}
+          onClose={() => setRenewalOpen(false)}
+        />
       )}
       {moveOutOpen && (
         <MoveOutDialog
