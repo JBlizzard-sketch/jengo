@@ -1,25 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
-  useListBuildings, useListResidents, useListIssues,
-  getListBuildingsQueryKey, getListResidentsQueryKey, getListIssuesQueryKey,
+  useListBuildings, useListResidents, useListIssues, useListContractors,
+  getListBuildingsQueryKey, getListResidentsQueryKey, getListIssuesQueryKey, getListContractorsQueryKey,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Building, Users, AlertCircle, Search } from "lucide-react";
+import { Building, Users, AlertCircle, Search, Wrench } from "lucide-react";
 
 interface SearchResult {
   id: string;
   label: string;
   sublabel: string;
   href: string;
-  type: "building" | "resident" | "issue";
+  type: "building" | "resident" | "issue" | "contractor";
 }
 
 function ResultIcon({ type }: { type: SearchResult["type"] }) {
   const cls = "w-4 h-4 flex-shrink-0";
   if (type === "building") return <Building className={`${cls} text-primary`} />;
   if (type === "resident") return <Users className={`${cls} text-blue-500`} />;
+  if (type === "contractor") return <Wrench className={`${cls} text-purple-500`} />;
   return <AlertCircle className={`${cls} text-amber-500`} />;
 }
 
@@ -32,6 +33,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey(), enabled: open } });
   const { data: residents } = useListResidents(undefined, { query: { queryKey: getListResidentsQueryKey(), enabled: open } });
   const { data: issues } = useListIssues(undefined, { query: { queryKey: getListIssuesQueryKey(), enabled: open } });
+  const { data: contractors } = useListContractors({ query: { queryKey: getListContractorsQueryKey(), enabled: open } });
 
   useEffect(() => {
     if (open) {
@@ -68,8 +70,23 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
         id: `resident-${r.id}`,
         label: `${r.firstName} ${r.lastName}`,
         sublabel: `Resident · ${r.phone ?? r.email ?? ""}`,
-        href: `/buildings/${r.buildingId}`,
+        href: `/residents/${r.id}`,
         type: "resident",
+      }));
+
+    (contractors ?? [])
+      .filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        c.company?.toLowerCase().includes(q) ||
+        c.trade?.toLowerCase().includes(q)
+      )
+      .slice(0, 3)
+      .forEach(c => results.push({
+        id: `contractor-${c.id}`,
+        label: c.name,
+        sublabel: `Contractor · ${c.trade}${c.company ? ` · ${c.company}` : ""}`,
+        href: `/contractors`,
+        type: "contractor",
       }));
 
     (issues ?? [])

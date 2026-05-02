@@ -163,6 +163,27 @@ export default function Buildings() {
                   </div>
                 </div>
 
+                {/* Occupancy bar */}
+                {(building as any).occupancyRate !== undefined && (
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                      <span>Occupancy</span>
+                      <span className="font-medium text-foreground">
+                        {(building as any).occupiedUnits ?? 0}/{building.totalUnits} units · {(building as any).occupancyRate ?? 0}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          (building as any).occupancyRate >= 80 ? "bg-green-500" :
+                          (building as any).occupancyRate >= 50 ? "bg-amber-400" : "bg-red-400"
+                        }`}
+                        style={{ width: `${(building as any).occupancyRate ?? 0}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-auto pt-4 border-t border-border flex justify-between items-center text-sm">
                   <div className="flex items-center text-muted-foreground">
                     <Users className="w-4 h-4 mr-1" />

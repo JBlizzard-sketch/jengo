@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
   useGetResident, useUpdateResident, useListPayments, useListBuildings, useListUnits, useListIssues,
+  useUpdatePayment,
   getGetResidentQueryKey, getListPaymentsQueryKey, getListBuildingsQueryKey, getListUnitsQueryKey, getListIssuesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -96,6 +97,33 @@ export default function ResidentDetail() {
   );
 
   const updateResident = useUpdateResident();
+  const updatePayment = useUpdatePayment();
+  const [recordingPaymentId, setRecordingPaymentId] = useState<number | null>(null);
+  const [mpesaRef, setMpesaRef] = useState("");
+
+  const handleRecordPayment = (paymentId: number) => {
+    updatePayment.mutate(
+      { id: paymentId, data: { status: "paid", paidDate: new Date().toISOString().split("T")[0], mpesaRef: mpesaRef || undefined } as any },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListPaymentsQueryKey({ residentId: id } as any) });
+          setRecordingPaymentId(null);
+          setMpesaRef("");
+        },
+      }
+    );
+  };
+
+  const handleWaivePayment = (paymentId: number) => {
+    updatePayment.mutate(
+      { id: paymentId, data: { status: "waived" } as any },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListPaymentsQueryKey({ residentId: id } as any) });
+        },
+      }
+    );
+  };
 
   const patch = (updates: Record<string, unknown>) =>
     new Promise<void>((resolve, reject) => {
@@ -276,21 +304,70 @@ export default function ResidentDetail() {
           ) : (
             <div className="divide-y divide-border">
               {(payments ?? []).slice(0, 12).map(p => (
-                <div key={p.id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">{p.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Due {p.dueDate}
-                      {p.paidDate && ` · Paid ${p.paidDate}`}
-                      {p.mpesaRef && ` · ${p.mpesaRef}`}
-                    </p>
+                <div key={p.id}>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{p.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Due {p.dueDate}
+                        {p.paidDate && ` · Paid ${p.paidDate}`}
+                        {p.mpesaRef && ` · ${p.mpesaRef}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4 shrink-0">
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${PAYMENT_STATUS_COLORS[p.status] ?? ""}`}>
+                        {p.status}
+                      </span>
+                      <span className="text-sm font-semibold">KES {Number(p.amount).toLocaleString()}</span>
+                      {(p.status === "pending" || p.status === "overdue") && (
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2 text-green-700 border-green-200 hover:bg-green-50"
+                            onClick={() => { setRecordingPaymentId(p.id); setMpesaRef(""); }}
+                          >
+                            Record
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs px-2 text-muted-foreground"
+                            onClick={() => handleWaivePayment(p.id)}
+                            disabled={updatePayment.isPending}
+                          >
+                            Waive
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 ml-4">
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${PAYMENT_STATUS_COLORS[p.status] ?? ""}`}>
-                      {p.status}
-                    </span>
-                    <span className="text-sm font-semibold">KES {Number(p.amount).toLocaleString()}</span>
-                  </div>
+                  {recordingPaymentId === p.id && (
+                    <div className="px-4 pb-3 flex items-center gap-2">
+                      <Input
+                        placeholder="M-Pesa ref (optional)"
+                        value={mpesaRef}
+                        onChange={e => setMpesaRef(e.target.value)}
+                        className="h-7 text-xs flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs px-3"
+                        onClick={() => handleRecordPayment(p.id)}
+                        disabled={updatePayment.isPending}
+                      >
+                        {updatePayment.isPending ? "Saving..." : "Confirm"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs px-2"
+                        onClick={() => { setRecordingPaymentId(null); setMpesaRef(""); }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
               {(payments ?? []).length > 12 && (

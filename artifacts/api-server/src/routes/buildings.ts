@@ -11,10 +11,27 @@ export const buildingsRouter = Router();
 
 buildingsRouter.get("/", async (req, res) => {
   const buildings = await db.select().from(buildingsTable).orderBy(buildingsTable.name);
+  const occupancyCounts = await db.select({
+    buildingId: unitsTable.buildingId,
+    status: unitsTable.status,
+    cnt: count(),
+  }).from(unitsTable).groupBy(unitsTable.buildingId, unitsTable.status);
+
+  const occupancyMap: Record<number, { occupied: number; total: number }> = {};
+  for (const row of occupancyCounts) {
+    if (!occupancyMap[row.buildingId]) occupancyMap[row.buildingId] = { occupied: 0, total: 0 };
+    occupancyMap[row.buildingId].total += row.cnt;
+    if (row.status === "occupied") occupancyMap[row.buildingId].occupied += row.cnt;
+  }
+
   res.json(buildings.map(b => ({
     ...b,
     serviceChargeAmount: b.serviceChargeAmount ? Number(b.serviceChargeAmount) : null,
     reputationScore: b.reputationScore ? Number(b.reputationScore) : null,
+    occupiedUnits: occupancyMap[b.id]?.occupied ?? 0,
+    occupancyRate: occupancyMap[b.id]?.total
+      ? Math.round((occupancyMap[b.id].occupied / occupancyMap[b.id].total) * 100)
+      : 0,
   })));
 });
 
