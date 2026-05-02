@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight, CalendarClock, RotateCcw
+  ArrowLeft, Phone, Mail, Home, Building, Calendar, CreditCard, AlertCircle, LogOut, Edit2, Check, X, ChevronRight, CalendarClock, RotateCcw, FileText
 } from "lucide-react";
+import { printHtml, formatKES, formatDate, today, loadSettings } from "@/lib/print-utils";
 import { Link } from "wouter";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -155,6 +156,101 @@ export default function ResidentDetail() {
   const totalOverdue = (payments ?? []).filter(p => p.status === "overdue").reduce((s, p) => s + Number(p.amount), 0);
   const openIssues = (issues ?? []).filter(i => i.status === "open" || i.status === "in_progress");
 
+  const printDemandLetter = () => {
+    const s = loadSettings();
+    const overdueList = (payments ?? []).filter(p => p.status === "overdue");
+    const pendingList = (payments ?? []).filter(p => p.status === "pending");
+    const allDue = [...overdueList, ...pendingList];
+    const totalDue = allDue.reduce((sum, p) => sum + Number(p.amount), 0);
+    const rows = allDue.map(p => `<tr>
+      <td>${p.description ?? "—"}</td>
+      <td>${p.month ?? "—"}</td>
+      <td>${formatDate(p.dueDate)}</td>
+      <td style="text-align:right;font-weight:600;">${formatKES(p.amount)}</td>
+      <td><span class="badge ${p.status === "overdue" ? "badge-red" : "badge-amber"}">${p.status}</span></td>
+    </tr>`).join("");
+    const phone = resident.phone?.replace(/\D/g,"").slice(-9) ?? "";
+    const html = `
+      <div class="header">
+        <div>
+          <div class="brand">Jengo</div>
+          <div style="font-size:12px;color:#666;">${s.companyName}</div>
+          <div style="font-size:12px;color:#666;">${s.companyAddress}</div>
+          <div style="font-size:12px;color:#666;">${s.companyPhone} · ${s.companyEmail}</div>
+        </div>
+        <div class="meta">
+          <div>Date: ${today()}</div>
+          <div>Ref: DMD-${String(resident.id).padStart(4,"0")}-${Date.now().toString(36).toUpperCase().slice(-4)}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px;color:#666;">To:</div>
+        <div style="font-weight:600;">${resident.firstName} ${resident.lastName}</div>
+        <div style="font-size:12px;color:#666;">Unit ${unit?.unitNumber ?? "—"}, ${building?.name ?? "—"}</div>
+        ${resident.phone ? `<div style="font-size:12px;color:#666;">${resident.phone}</div>` : ""}
+      </div>
+
+      <div style="text-align:center;margin-bottom:20px;">
+        <h1 style="font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:1px;border:2px solid #b91c1c;color:#b91c1c;display:inline-block;padding:6px 24px;border-radius:4px;">
+          NOTICE OF OUTSTANDING SERVICE CHARGES
+        </h1>
+      </div>
+
+      <div class="letter-body">
+        <p>Dear <strong>${resident.firstName} ${resident.lastName}</strong>,</p>
+      </div>
+      <div class="letter-body">
+        <p>We refer to your tenancy / occupation of <strong>Unit ${unit?.unitNumber ?? "—"}</strong> at <strong>${building?.name ?? "—"}</strong>. Our records indicate that the following service charges remain outstanding as of <strong>${today()}</strong>:</p>
+      </div>
+
+      <table style="margin-bottom:16px;">
+        <thead><tr>
+          <th>Description</th><th>Period</th><th>Due Date</th>
+          <th style="text-align:right;">Amount</th><th>Status</th>
+        </tr></thead>
+        <tbody>${rows || "<tr><td colspan='5' style='text-align:center;'>No overdue charges found</td></tr>"}</tbody>
+        <tfoot><tr>
+          <td colspan="3" style="font-weight:700;">TOTAL AMOUNT DUE</td>
+          <td style="text-align:right;font-size:16px;color:#b91c1c;">${formatKES(totalDue)}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+
+      <div class="letter-body">
+        <p>You are hereby requested to <strong>settle the full outstanding balance of ${formatKES(totalDue)} within seven (7) days</strong> of the date of this notice.</p>
+      </div>
+
+      <div class="box" style="margin-bottom:16px;">
+        <h3>Payment Instructions</h3>
+        <p style="margin-top:6px;">Pay via <strong>M-Pesa</strong>:</p>
+        <p class="indent">Paybill Number: <strong>${s.mpesaPaybill}</strong></p>
+        <p class="indent">Account Number: <strong>${s.mpesaAccountPrefix}${phone}</strong></p>
+        <p style="margin-top:6px;font-size:12px;color:#666;">Alternatively, contact our office to arrange payment by bank transfer or cash.</p>
+      </div>
+
+      <div class="letter-body">
+        <p>Failure to settle this amount within the stipulated period may result in further action in accordance with the terms of your tenancy agreement and applicable Kenyan law, including but not limited to referral for legal recovery proceedings under the <em>Landlord and Tenant (Shops, Hotels and Catering Establishments) Act (Cap 301)</em>.</p>
+      </div>
+
+      <div class="letter-body">
+        <p>If you have already made this payment, please disregard this notice and provide your M-Pesa confirmation to our office at your earliest convenience.</p>
+      </div>
+
+      <div style="margin-top:32px;">
+        <p>Yours faithfully,</p>
+        <div style="margin-top:40px;border-top:1px solid #000;width:200px;padding-top:6px;">
+          <p style="font-weight:600;">${s.companyName}</p>
+          <p style="font-size:12px;color:#666;">Property Management</p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>This notice was generated on ${today()} by ${s.companyName}. ${s.companyPhone} · ${s.companyEmail}</p>
+      </div>`;
+    printHtml(html, `Demand Letter — ${resident.firstName} ${resident.lastName}`);
+  };
+
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
@@ -182,18 +278,32 @@ export default function ResidentDetail() {
               </div>
             </div>
           </div>
-          {resident.status === "active" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
-              onClick={handleMoveOut}
-              disabled={updateResident.isPending}
-            >
-              <LogOut className="w-4 h-4" />
-              Move Out
-            </Button>
-          )}
+          <div className="flex flex-col gap-2">
+            {totalOverdue > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-red-700 border-red-300 hover:bg-red-50"
+                onClick={printDemandLetter}
+                data-testid="button-demand-letter"
+              >
+                <FileText className="w-4 h-4" />
+                Demand Letter
+              </Button>
+            )}
+            {resident.status === "active" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+                onClick={handleMoveOut}
+                disabled={updateResident.isPending}
+              >
+                <LogOut className="w-4 h-4" />
+                Move Out
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

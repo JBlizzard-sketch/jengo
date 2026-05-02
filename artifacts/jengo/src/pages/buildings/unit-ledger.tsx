@@ -7,7 +7,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Home, User, Phone, Mail, TrendingUp, AlertTriangle, Clock, CreditCard, AlertCircle } from "lucide-react";
+import { ArrowLeft, Home, User, Phone, Mail, TrendingUp, AlertTriangle, Clock, CreditCard, AlertCircle, Printer, FileText } from "lucide-react";
+import { printHtml, formatKES, formatDate, today, loadSettings } from "@/lib/print-utils";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -79,6 +80,133 @@ export default function UnitLedger() {
 
   const openIssues = (allIssues ?? []).filter(i => i.status === "open" || i.status === "in_progress");
 
+  const printStatement = () => {
+    const s = loadSettings();
+    const sortedPayments = [...(payments ?? [])].sort((a, b) => (b.dueDate ?? "").localeCompare(a.dueDate ?? ""));
+    const rows = sortedPayments.map(p => {
+      const badge = p.status === "paid" ? "badge-green" : p.status === "overdue" ? "badge-red" : p.status === "waived" ? "badge-gray" : "badge-amber";
+      return `<tr>
+        <td>${p.description ?? "—"}</td>
+        <td>${p.month ?? "—"}</td>
+        <td>${formatDate(p.dueDate)}</td>
+        <td style="text-align:right;font-weight:600;">${formatKES(p.amount)}</td>
+        <td><span class="badge ${badge}">${p.status}</span></td>
+        <td>${p.paidDate ? formatDate(p.paidDate) : "—"}</td>
+        <td>${p.paymentMethod ?? "—"}${p.mpesaRef ? ` · ${p.mpesaRef}` : ""}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `
+      <div class="header">
+        <div>
+          <div class="brand">Jengo</div>
+          <div style="font-size:12px;color:#666;">${s.companyName}</div>
+          <div style="font-size:12px;color:#666;">${s.companyAddress} · ${s.companyPhone}</div>
+        </div>
+        <div class="meta">
+          <div style="font-size:18px;font-weight:700;color:#111;">SERVICE CHARGE STATEMENT</div>
+          <div>Date: ${today()}</div>
+          <div>Ref: STMT-UNIT${unit.unitNumber}-${Date.now().toString(36).toUpperCase().slice(-6)}</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="box">
+          <div class="label">Property</div>
+          <div class="value">${building?.name ?? "—"}</div>
+          <div style="font-size:12px;color:#666;margin-top:2px;">${building?.address ?? ""}</div>
+        </div>
+        <div class="box">
+          <div class="label">Unit / Resident</div>
+          <div class="value">Unit ${unit.unitNumber}</div>
+          <div style="font-size:12px;color:#666;margin-top:2px;">${activeResident ? `${activeResident.firstName} ${activeResident.lastName}` : "Vacant"}${activeResident?.phone ? ` · ${activeResident.phone}` : ""}</div>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-box">
+          <div class="label">Total Billed</div>
+          <div class="value-lg">${formatKES(totalCharged)}</div>
+        </div>
+        <div class="summary-box" style="border-color:#bbf7d0;">
+          <div class="label">Collected</div>
+          <div class="value-lg" style="color:#15803d;">${formatKES(collected)}</div>
+        </div>
+        <div class="summary-box" style="border-color:${overdue > 0 ? "#fecaca" : "#e5e7eb"};">
+          <div class="label">Overdue</div>
+          <div class="value-lg" style="color:${overdue > 0 ? "#b91c1c" : "#111"};">${formatKES(overdue)}</div>
+        </div>
+        <div class="summary-box" style="border-color:#fed7aa;">
+          <div class="label">Outstanding</div>
+          <div class="value-lg" style="color:#92400e;">${formatKES(outstanding)}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead><tr>
+          <th>Description</th><th>Month</th><th>Due Date</th>
+          <th style="text-align:right;">Amount</th><th>Status</th>
+          <th>Paid Date</th><th>Method / Ref</th>
+        </tr></thead>
+        <tbody>${rows || "<tr><td colspan='7' style='text-align:center;color:#888;'>No payment records</td></tr>"}</tbody>
+        <tfoot><tr>
+          <td colspan="3">Total</td>
+          <td style="text-align:right;">${formatKES(totalCharged)}</td>
+          <td colspan="3">Collected: ${formatKES(collected)} &nbsp;|&nbsp; Outstanding: ${formatKES(outstanding)}</td>
+        </tr></tfoot>
+      </table>
+
+      ${outstanding > 0 ? `<div class="box" style="border-color:#fecaca;background:#fff5f5;margin-top:16px;">
+        <strong style="color:#b91c1c;">Outstanding Balance: ${formatKES(outstanding)}</strong><br/>
+        <span style="font-size:12px;color:#666;">Please pay via M-Pesa: Paybill <strong>${s.mpesaPaybill}</strong> · Account <strong>${s.mpesaAccountPrefix}${activeResident?.phone?.replace(/\D/g,"").slice(-9) ?? ""}</strong></span>
+      </div>` : ""}
+
+      <div class="footer">
+        <p>This statement was generated by ${s.companyName} on ${today()}. For queries contact ${s.companyPhone} or ${s.companyEmail}.</p>
+        <p style="margin-top:6px;font-style:italic;">This is a computer-generated statement and requires no signature.</p>
+      </div>`;
+    printHtml(html, `Statement — Unit ${unit.unitNumber}`);
+  };
+
+  const printReceipt = (p: any) => {
+    const s = loadSettings();
+    const html = `
+      <div style="max-width:420px;margin:0 auto;">
+        <div class="header">
+          <div><div class="brand">Jengo</div><div style="font-size:11px;color:#666;">${s.companyName}</div></div>
+          <div class="meta">
+            <div style="font-size:16px;font-weight:700;">PAYMENT RECEIPT</div>
+            <div>Date: ${today()}</div>
+          </div>
+        </div>
+
+        <div style="text-align:center;margin-bottom:20px;">
+          <span class="stamp">✓ PAID</span>
+        </div>
+
+        <table>
+          <tbody>
+            <tr><td style="color:#888;">Receipt No.</td><td style="font-weight:600;">RCT-${String(p.id).padStart(6,"0")}</td></tr>
+            <tr><td style="color:#888;">Building</td><td>${building?.name ?? "—"}</td></tr>
+            <tr><td style="color:#888;">Unit</td><td>Unit ${unit.unitNumber}</td></tr>
+            <tr><td style="color:#888;">Resident</td><td>${activeResident ? `${activeResident.firstName} ${activeResident.lastName}` : "—"}</td></tr>
+            <tr><td style="color:#888;">Description</td><td>${p.description ?? "—"}</td></tr>
+            <tr><td style="color:#888;">Period</td><td>${p.month ?? "—"}</td></tr>
+            <tr><td style="color:#888;">Amount Paid</td><td style="font-weight:700;font-size:16px;color:#15803d;">${formatKES(p.amount)}</td></tr>
+            <tr><td style="color:#888;">Payment Date</td><td>${formatDate(p.paidDate)}</td></tr>
+            <tr><td style="color:#888;">Payment Method</td><td>${p.paymentMethod ?? "—"}</td></tr>
+            ${p.mpesaRef ? `<tr><td style="color:#888;">M-Pesa Ref</td><td style="font-weight:600;">${p.mpesaRef}</td></tr>` : ""}
+          </tbody>
+        </table>
+
+        <div class="footer" style="text-align:center;">
+          <p>${s.companyName} · ${s.companyPhone}</p>
+          <p style="margin-top:4px;font-style:italic;">Thank you for your payment.</p>
+        </div>
+      </div>`;
+    printHtml(html, `Receipt — ${p.description}`);
+  };
+
   return (
     <div className="space-y-6 max-w-4xl">
       <button
@@ -108,9 +236,21 @@ export default function UnitLedger() {
             </div>
           </div>
         </div>
-        <div className="text-right text-sm text-muted-foreground">
-          <p>{building?.name}</p>
-          <p className="capitalize">{building?.neighbourhood?.replace("_", " ")}</p>
+        <div className="flex flex-col items-end gap-2">
+          <div className="text-right text-sm text-muted-foreground">
+            <p>{building?.name}</p>
+            <p className="capitalize">{building?.neighbourhood?.replace("_", " ")}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={printStatement}
+            data-testid="button-print-statement"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Print Statement
+          </Button>
         </div>
       </div>
 
@@ -256,6 +396,7 @@ export default function UnitLedger() {
                     <th className="text-left p-4 font-medium text-muted-foreground">Status</th>
                     <th className="text-left p-4 font-medium text-muted-foreground">Paid</th>
                     <th className="text-left p-4 font-medium text-muted-foreground">Method</th>
+                    <th className="p-4" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -272,6 +413,20 @@ export default function UnitLedger() {
                       </td>
                       <td className="p-4 text-muted-foreground">{p.paidDate ?? "—"}</td>
                       <td className="p-4 text-muted-foreground">{p.paymentMethod ?? "—"}{p.mpesaRef ? ` · ${p.mpesaRef}` : ""}</td>
+                      <td className="p-4">
+                        {p.status === "paid" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                            onClick={() => printReceipt(p)}
+                            data-testid={`button-receipt-${p.id}`}
+                          >
+                            <FileText className="w-3 h-3" />
+                            Receipt
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -279,7 +434,7 @@ export default function UnitLedger() {
                   <tr className="border-t-2 border-border bg-muted/30">
                     <td colSpan={3} className="p-4 font-semibold">Total</td>
                     <td className="p-4 text-right font-bold">KES {totalCharged.toLocaleString()}</td>
-                    <td colSpan={3} className="p-4 text-sm text-muted-foreground">
+                    <td colSpan={4} className="p-4 text-sm text-muted-foreground">
                       Collected: KES {collected.toLocaleString()} · Outstanding: KES {outstanding.toLocaleString()}
                     </td>
                   </tr>
