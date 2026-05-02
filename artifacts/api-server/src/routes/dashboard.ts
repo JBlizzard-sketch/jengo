@@ -4,7 +4,8 @@ import {
   buildingsTable, residentsTable, unitsTable, issuesTable,
   paymentsTable, visitorsTable, jobsTable, announcementsTable,
 } from "@workspace/db";
-import { count, eq, and, desc } from "drizzle-orm";
+import { count, eq, and, desc, gte } from "drizzle-orm";
+import { issueCommentsTable } from "@workspace/db";
 
 export const dashboardRouter = Router();
 
@@ -101,6 +102,21 @@ dashboardRouter.get("/activity", async (req, res) => {
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, limit);
 
   res.json(activities);
+});
+
+// GET /api/dashboard/alerts — notification counts for management sidebar badges
+dashboardRouter.get("/alerts", async (req, res) => {
+  const [{ openIssues }] = await db.select({ openIssues: count() }).from(issuesTable)
+    .where(eq(issuesTable.status, "open"));
+  const [{ overduePayments }] = await db.select({ overduePayments: count() }).from(paymentsTable)
+    .where(eq(paymentsTable.status, "overdue"));
+  const [{ pendingVisitors }] = await db.select({ pendingVisitors: count() }).from(visitorsTable)
+    .where(eq(visitorsTable.status, "pending"));
+  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const [{ residentComments }] = await db.select({ residentComments: count() }).from(issueCommentsTable)
+    .where(and(eq(issueCommentsTable.authorRole, "resident"), gte(issueCommentsTable.createdAt, cutoff)));
+
+  res.json({ openIssues, overduePayments, pendingVisitors, residentComments });
 });
 
 dashboardRouter.get("/building-scores", async (req, res) => {

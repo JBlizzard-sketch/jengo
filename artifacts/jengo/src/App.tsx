@@ -22,6 +22,7 @@ import Contractors from "@/pages/contractors";
 import PortalLogin from "@/pages/portal/login";
 import PortalDashboard from "@/pages/portal/dashboard";
 import PortalIssues from "@/pages/portal/issues";
+import PortalIssueDetail from "@/pages/portal/issue-detail";
 import PortalPayments from "@/pages/portal/payments";
 import PortalAnnouncements from "@/pages/portal/announcements";
 import PortalVisitors from "@/pages/portal/visitors";
@@ -60,6 +61,9 @@ function Router() {
       <Route path="/portal" component={PortalLogin} />
       <Route path="/portal/dashboard">
         {() => <PortalGuard component={PortalDashboard} />}
+      </Route>
+      <Route path="/portal/issues/:id">
+        {() => <PortalGuard component={PortalIssueDetail} />}
       </Route>
       <Route path="/portal/issues">
         {() => <PortalGuard component={PortalIssues} />}

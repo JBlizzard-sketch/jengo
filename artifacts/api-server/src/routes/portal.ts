@@ -1,5 +1,5 @@
 import "../types/session";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import {
   residentsTable, unitsTable, buildingsTable, issuesTable, issueCommentsTable,
@@ -15,7 +15,7 @@ export const portalRouter = Router();
 portalRouter.use(requireResident);
 
 // GET /api/portal/home — resident's home dashboard
-portalRouter.get("/home", async (req, res) => {
+portalRouter.get("/home", async (req: Request, res: Response): Promise<void> => {
   const residentId = req.session.residentId!;
   const unitId = req.session.unitId!;
   const buildingId = req.session.buildingId!;
@@ -25,11 +25,11 @@ portalRouter.get("/home", async (req, res) => {
   const [building] = await db.select().from(buildingsTable).where(eq(buildingsTable.id, buildingId));
 
   const myIssues = await db.select().from(issuesTable)
-    .where(and(eq(issuesTable.residentId, residentId)))
+    .where(eq(issuesTable.residentId, residentId))
     .orderBy(desc(issuesTable.createdAt)).limit(5);
 
   const myPayments = await db.select().from(paymentsTable)
-    .where(and(eq(paymentsTable.residentId, residentId)))
+    .where(eq(paymentsTable.residentId, residentId))
     .orderBy(desc(paymentsTable.createdAt)).limit(3);
 
   const announcements = await db.select().from(announcementsTable)
@@ -56,7 +56,7 @@ portalRouter.get("/home", async (req, res) => {
 });
 
 // GET /api/portal/issues — resident's own issues
-portalRouter.get("/issues", async (req, res) => {
+portalRouter.get("/issues", async (req: Request, res: Response): Promise<void> => {
   const residentId = req.session.residentId!;
   const issues = await db.select().from(issuesTable)
     .where(eq(issuesTable.residentId, residentId))
@@ -64,8 +64,28 @@ portalRouter.get("/issues", async (req, res) => {
   res.json(issues);
 });
 
+// GET /api/portal/issues/:id — single issue + comments (must own it)
+portalRouter.get("/issues/:id", async (req: Request, res: Response): Promise<void> => {
+  const residentId = req.session.residentId!;
+  const id = Number(req.params.id);
+
+  const [issue] = await db.select().from(issuesTable)
+    .where(and(eq(issuesTable.id, id), eq(issuesTable.residentId, residentId)));
+
+  if (!issue) {
+    res.status(404).json({ error: "Issue not found" });
+    return;
+  }
+
+  const comments = await db.select().from(issueCommentsTable)
+    .where(eq(issueCommentsTable.issueId, id))
+    .orderBy(issueCommentsTable.createdAt);
+
+  res.json({ issue, comments });
+});
+
 // POST /api/portal/issues — create issue as resident
-portalRouter.post("/issues", async (req, res) => {
+portalRouter.post("/issues", async (req: Request, res: Response): Promise<void> => {
   const CreateBody = z.object({
     title: z.string().min(5),
     description: z.string().optional(),
@@ -86,8 +106,35 @@ portalRouter.post("/issues", async (req, res) => {
   res.status(201).json(issue);
 });
 
+// POST /api/portal/issues/:id/comments — resident adds a comment
+portalRouter.post("/issues/:id/comments", async (req: Request, res: Response): Promise<void> => {
+  const residentId = req.session.residentId!;
+  const id = Number(req.params.id);
+
+  // Verify ownership
+  const [issue] = await db.select().from(issuesTable)
+    .where(and(eq(issuesTable.id, id), eq(issuesTable.residentId, residentId)));
+
+  if (!issue) {
+    res.status(404).json({ error: "Issue not found" });
+    return;
+  }
+
+  const Body = z.object({ content: z.string().min(1).max(2000) });
+  const { content } = Body.parse(req.body);
+
+  const [comment] = await db.insert(issueCommentsTable).values({
+    issueId: id,
+    authorName: req.session.residentName ?? "Resident",
+    authorRole: "resident",
+    content,
+  }).returning();
+
+  res.status(201).json(comment);
+});
+
 // GET /api/portal/payments — resident's payments
-portalRouter.get("/payments", async (req, res) => {
+portalRouter.get("/payments", async (req: Request, res: Response): Promise<void> => {
   const residentId = req.session.residentId!;
   const payments = await db.select().from(paymentsTable)
     .where(eq(paymentsTable.residentId, residentId))
@@ -95,8 +142,45 @@ portalRouter.get("/payments", async (req, res) => {
   res.json(payments);
 });
 
+// POST /api/portal/payments/:id/submit-mpesa — resident submits M-Pesa ref for verification
+portalRouter.post("/payments/:id/submit-mpesa", async (req: Request, res: Response): Promise<void> => {
+  const residentId = req.session.residentId!;
+  const id = Number(req.params.id);
+
+  const [payment] = await db.select().from(paymentsTable)
+    .where(and(eq(paymentsTable.id, id), eq(paymentsTable.residentId, residentId)));
+
+  if (!payment) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+
+  if (payment.status === "paid" || payment.status === "waived") {
+    res.status(400).json({ error: "Payment is already settled" });
+    return;
+  }
+
+  const Body = z.object({
+    mpesaRef: z.string().min(5).max(30),
+    paidDate: z.string().optional(),
+  });
+  const { mpesaRef, paidDate } = Body.parse(req.body);
+
+  const [updated] = await db.update(paymentsTable)
+    .set({
+      mpesaRef,
+      paymentMethod: "mpesa",
+      paidDate: paidDate ?? new Date().toISOString().split("T")[0],
+      status: "pending", // Management still needs to verify
+    })
+    .where(eq(paymentsTable.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
 // GET /api/portal/announcements — building announcements for resident
-portalRouter.get("/announcements", async (req, res) => {
+portalRouter.get("/announcements", async (req: Request, res: Response): Promise<void> => {
   const buildingId = req.session.buildingId!;
   const announcements = await db.select().from(announcementsTable)
     .where(eq(announcementsTable.buildingId, buildingId))
@@ -105,7 +189,7 @@ portalRouter.get("/announcements", async (req, res) => {
 });
 
 // GET /api/portal/visitors — resident's pre-cleared visitors
-portalRouter.get("/visitors", async (req, res) => {
+portalRouter.get("/visitors", async (req: Request, res: Response): Promise<void> => {
   const residentId = req.session.residentId!;
   const visitors = await db.select().from(visitorsTable)
     .where(eq(visitorsTable.residentId, residentId))
@@ -114,7 +198,7 @@ portalRouter.get("/visitors", async (req, res) => {
 });
 
 // POST /api/portal/visitors — pre-clear a visitor
-portalRouter.post("/visitors", async (req, res) => {
+portalRouter.post("/visitors", async (req: Request, res: Response): Promise<void> => {
   const CreateBody = z.object({
     visitorName: z.string().min(2),
     visitorPhone: z.string().optional(),

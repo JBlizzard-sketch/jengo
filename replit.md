@@ -7,8 +7,10 @@ A full-stack building management platform for Nairobi apartment blocks (Kilimani
 - **Frontend**: React + Vite (artifact: `jengo`) at path `/`
 - **Backend**: Express 5 + Drizzle ORM (artifact: `api-server`) at path `/api`
 - **Database**: PostgreSQL (Replit-provisioned, via `DATABASE_URL`)
+- **Session store**: `connect-pg-simple` → `sessions` table in PostgreSQL
 - **API contract**: OpenAPI spec → Orval codegen → React Query hooks
 - **Monorepo**: pnpm workspaces
+- **GitHub**: https://github.com/JBlizzard-sketch/jengo
 
 ## Key Packages
 
@@ -21,7 +23,7 @@ A full-stack building management platform for Nairobi apartment blocks (Kilimani
 | `@workspace/api-client-react` | Generated React Query hooks |
 | `@workspace/api-zod` | Generated Zod schemas |
 
-## Frontend Pages
+## Management Dashboard Pages
 
 | Route | Component | Description |
 |---|---|---|
@@ -36,9 +38,43 @@ A full-stack building management platform for Nairobi apartment blocks (Kilimani
 | `/payments` | `Payments` | Service charge tracking and recording |
 | `/contractors` | `Contractors` | Contractors and commissioned jobs |
 
+## Resident Portal Pages (Phase 2)
+
+| Route | Component | Description |
+|---|---|---|
+| `/portal` | `PortalLogin` | Resident sign-in (email + unit number) |
+| `/portal/dashboard` | `PortalDashboard` | My unit, building contacts, open issues, payments |
+| `/portal/issues` | `PortalIssues` | View own issues, submit new issue |
+| `/portal/payments` | `PortalPayments` | View own service charge history |
+| `/portal/announcements` | `PortalAnnouncements` | Building notices (read-only) |
+| `/portal/visitors` | `PortalVisitors` | Pre-clear visitors for gate entry |
+
+### Portal Auth
+- Login: `POST /api/auth/login` — email + unit number → session cookie
+- Session stored in PostgreSQL `sessions` table (7-day cookie)
+- `ResidentAuthProvider` context in `artifacts/jengo/src/contexts/resident-auth.tsx`
+- `PortalGuard` component redirects unauthenticated users to `/portal`
+- Test credentials: `david.karanja@gmail.com` / unit `A1` (Kilimani Heights)
+
 ## Backend Routes
 
 All routes under `/api`:
+
+### Auth (Phase 2)
+- `POST /api/auth/login` — login by email + unit number; sets session cookie
+- `POST /api/auth/logout` — destroy session
+- `GET /api/auth/me` — return current resident session
+
+### Portal (resident-scoped, Phase 2)
+- `GET /api/portal/home` — dashboard data (unit, building, stats, recent issues/payments/announcements)
+- `GET /api/portal/issues` — resident's own issues
+- `POST /api/portal/issues` — submit new issue
+- `GET /api/portal/payments` — resident's payments
+- `GET /api/portal/announcements` — building announcements
+- `GET /api/portal/visitors` — resident's visitors
+- `POST /api/portal/visitors` — pre-clear a visitor
+
+### Management
 - `GET /api/healthz` — health check
 - `GET/POST /api/buildings` — list and create buildings
 - `GET/PATCH /api/buildings/:id` — building detail and update
@@ -65,9 +101,9 @@ All routes under `/api`:
 - `GET /api/dashboard/activity` — recent activity feed
 - `GET /api/dashboard/building-scores` — reputation scores
 
-## Database Schema (8 tables)
+## Database Schema (10 tables)
 
-`buildings`, `units`, `residents`, `issues`, `issue_comments`, `announcements`, `visitors`, `payments`, `contractors`, `jobs`
+`buildings`, `units`, `residents`, `issues`, `issue_comments`, `announcements`, `visitors`, `payments`, `contractors`, `jobs`, `sessions`
 
 ## Design System
 
@@ -91,14 +127,28 @@ Regenerates `@workspace/api-client-react` and `@workspace/api-zod` from the Open
 pnpm --filter @workspace/db run push
 ```
 
-## Hook Pattern
+## GitHub Sync
+
+```bash
+node scripts/src/github-sync.mjs "commit message"
+```
+
+## Hook Pattern (management pages)
 
 ```tsx
 import { useListBuildings, getListBuildingsQueryKey } from "@workspace/api-client-react";
 const { data } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
 ```
 
+## Portal fetch pattern (portal pages — no generated hooks)
+
+```tsx
+const res = await fetch("/api/portal/home", { credentials: "include" });
+const data = await res.json();
+```
+
 ## Seeded Data
 
 - 4 buildings (Kilimani Heights, Westlands Park, Lavington Court, South B Gardens)
 - 9 residents, 11 units, 6 issues, 4 announcements, 5 visitors, 12 payments, 5 contractors, 4 jobs
+- Test resident: `david.karanja@gmail.com` / unit `A1`

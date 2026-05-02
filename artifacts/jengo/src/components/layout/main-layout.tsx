@@ -1,55 +1,102 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  Building, 
-  LayoutDashboard, 
-  AlertCircle, 
-  Megaphone, 
-  Users, 
-  CreditCard, 
+import {
+  Building,
+  LayoutDashboard,
+  AlertCircle,
+  Megaphone,
+  Users,
+  CreditCard,
   Wrench,
-  Menu
+  Menu,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/buildings", label: "Buildings", icon: Building },
-  { href: "/issues", label: "Issues", icon: AlertCircle },
-  { href: "/announcements", label: "Announcements", icon: Megaphone },
-  { href: "/visitors", label: "Visitors", icon: Users },
-  { href: "/payments", label: "Payments", icon: CreditCard },
-  { href: "/contractors", label: "Contractors", icon: Wrench },
-];
+interface Alerts {
+  openIssues: number;
+  overduePayments: number;
+  pendingVisitors: number;
+  residentComments: number;
+}
 
-function SidebarNav({ isMobile = false, close = () => {} }) {
+function Badge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function SidebarNav({ alerts, close = () => {} }: { alerts: Alerts | null; close?: () => void }) {
   const [location] = useLocation();
 
+  const NAV_ITEMS = [
+    { href: "/", label: "Dashboard", icon: LayoutDashboard, badge: 0 },
+    { href: "/buildings", label: "Buildings", icon: Building, badge: 0 },
+    {
+      href: "/issues", label: "Issues", icon: AlertCircle,
+      badge: (alerts?.openIssues ?? 0) + (alerts?.residentComments ?? 0),
+    },
+    { href: "/announcements", label: "Announcements", icon: Megaphone, badge: 0 },
+    { href: "/visitors", label: "Visitors", icon: Users, badge: alerts?.pendingVisitors ?? 0 },
+    { href: "/payments", label: "Payments", icon: CreditCard, badge: alerts?.overduePayments ?? 0 },
+    { href: "/contractors", label: "Contractors", icon: Wrench, badge: 0 },
+  ];
+
   return (
-    <nav className="flex flex-col gap-2 p-4">
-      {NAV_ITEMS.map((item) => {
-        const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-        return (
-          <Link key={item.href} href={item.href} onClick={close}>
-            <div
-              className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer ${
-                active
-                  ? "bg-primary text-primary-foreground font-medium"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </div>
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="flex flex-col h-full">
+      <nav className="flex flex-col gap-1 p-4 flex-1">
+        {NAV_ITEMS.map((item) => {
+          const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+          return (
+            <Link key={item.href} href={item.href} onClick={close}>
+              <div
+                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer ${
+                  active
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+                <span className="flex-1">{item.label}</span>
+                <Badge count={item.badge} />
+              </div>
+            </Link>
+          );
+        })}
+      </nav>
+      <div className="p-4 border-t border-border">
+        <a
+          href="/portal"
+          className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
+          onClick={close}
+        >
+          <ExternalLink className="w-4 h-4 flex-shrink-0" />
+          <span>Resident Portal</span>
+        </a>
+      </div>
+    </div>
   );
 }
 
 export function MainLayout({ children }: { children: ReactNode }) {
+  const [alerts, setAlerts] = useState<Alerts | null>(null);
+
+  useEffect(() => {
+    const load = () => {
+      fetch("/api/dashboard/alerts")
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setAlerts(d))
+        .catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Desktop Sidebar */}
@@ -58,7 +105,7 @@ export function MainLayout({ children }: { children: ReactNode }) {
           <h1 className="text-2xl font-bold tracking-tight text-primary">Jengo</h1>
           <p className="text-sm text-muted-foreground">Property Management</p>
         </div>
-        <SidebarNav />
+        <SidebarNav alerts={alerts} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -67,15 +114,18 @@ export function MainLayout({ children }: { children: ReactNode }) {
           <h1 className="text-xl font-bold text-primary">Jengo</h1>
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="relative">
                 <Menu className="w-6 h-6" />
+                {alerts && (alerts.openIssues + alerts.overduePayments + alerts.pendingVisitors + alerts.residentComments) > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-destructive" />
+                )}
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0">
               <div className="p-6">
                 <h1 className="text-2xl font-bold text-primary">Jengo</h1>
               </div>
-              <SidebarNav isMobile />
+              <SidebarNav alerts={alerts} />
             </SheetContent>
           </Sheet>
         </header>
