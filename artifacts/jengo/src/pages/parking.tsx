@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useListBuildings, useListUnits, useListResidents, getListBuildingsQueryKey, getListUnitsQueryKey, getListResidentsQueryKey } from "@workspace/api-client-react";
+import { useListBuildings, useListUnits, getListBuildingsQueryKey, getListUnitsQueryKey } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,6 @@ function printAllocationList(slots: any[], units: any[], buildingName: string) {
 function SlotFormDialog({
   open,
   buildings,
-  units,
   defaultBuildingId,
   editing,
   onClose,
@@ -139,7 +138,6 @@ function SlotFormDialog({
 }: {
   open: boolean;
   buildings: any[];
-  units: any[];
   defaultBuildingId: number;
   editing?: any;
   onClose: () => void;
@@ -152,8 +150,10 @@ function SlotFormDialog({
       : { buildingId: defaultBuildingId, slotNumber: "", type: "open", status: "free", unitId: null, vehicleReg: "", monthlyRate: null, notes: "" },
   });
 
-  const watchBuilding = form.watch("buildingId");
-  const filteredUnits = units.filter(u => u.buildingId === Number(watchBuilding));
+  const watchBuilding = Number(form.watch("buildingId"));
+  const { data: filteredUnits = [] } = useListUnits(watchBuilding, {
+    query: { queryKey: getListUnitsQueryKey(watchBuilding), enabled: !!watchBuilding },
+  });
 
   const save = useMutation({
     mutationFn: async (data: FormData) => {
@@ -284,7 +284,9 @@ export default function Parking() {
   const [editing, setEditing] = useState<any | null>(null);
 
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
-  const { data: units = [] } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
+  const { data: units = [] } = useListUnits(selectedBuilding, {
+    query: { queryKey: getListUnitsQueryKey(selectedBuilding), enabled: !!selectedBuilding },
+  });
 
   const parkingKey = ["parking", selectedBuilding];
   const { data: slots = [], isLoading } = useQuery<any[]>({
@@ -348,7 +350,7 @@ export default function Parking() {
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => printAllocationList(slots, units, buildingName)}
+              onClick={() => printAllocationList(slots, units as any[], buildingName)}
               data-testid="button-print"
             >
               <Printer className="w-4 h-4" />
@@ -497,7 +499,6 @@ export default function Parking() {
         <SlotFormDialog
           open
           buildings={buildings ?? []}
-          units={units}
           defaultBuildingId={selectedBuilding || (buildings?.[0]?.id ?? 0)}
           onClose={() => setAddOpen(false)}
           onSaved={refresh}
@@ -507,7 +508,6 @@ export default function Parking() {
         <SlotFormDialog
           open
           buildings={buildings ?? []}
-          units={units}
           defaultBuildingId={editing.buildingId}
           editing={editing}
           onClose={() => setEditing(null)}
