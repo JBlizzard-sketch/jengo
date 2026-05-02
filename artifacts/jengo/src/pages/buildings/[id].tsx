@@ -3,8 +3,9 @@ import { useRoute, useLocation } from "wouter";
 import {
   useGetBuilding, useListUnits, useListResidents, useListIssues,
   useCreateResident, useUpdateBuilding, useCreateUnit,
+  useGetPaymentsSummary,
   getGetBuildingQueryKey, getListUnitsQueryKey, getListResidentsQueryKey,
-  getListIssuesQueryKey,
+  getListIssuesQueryKey, getGetPaymentsSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -354,6 +355,10 @@ export default function BuildingDetail() {
     { buildingId: id },
     { query: { queryKey: getListIssuesQueryKey({ buildingId: id }), enabled: !!id } }
   );
+  const { data: paymentSummary } = useGetPaymentsSummary(
+    { buildingId: id },
+    { query: { queryKey: getGetPaymentsSummaryQueryKey({ buildingId: id }), enabled: !!id } }
+  );
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
   if (!building) return <div className="p-8 text-center text-muted-foreground">Building not found</div>;
@@ -434,6 +439,48 @@ export default function BuildingDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Financials */}
+      {paymentSummary && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="border-green-200 bg-green-50/40">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Collected</p>
+              <p className="text-xl font-bold mt-1 text-green-700">
+                KES {Number(paymentSummary.totalCollected ?? 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-green-600 mt-0.5">{paymentSummary.paidCount ?? 0} paid</p>
+            </CardContent>
+          </Card>
+          <Card className="border-red-200 bg-red-50/40">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Overdue</p>
+              <p className="text-xl font-bold mt-1 text-red-700">
+                KES {Number(paymentSummary.totalOverdue ?? 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-red-600 mt-0.5">{paymentSummary.overdueCount ?? 0} overdue</p>
+            </CardContent>
+          </Card>
+          <Card className="border-amber-200 bg-amber-50/40">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Outstanding</p>
+              <p className="text-xl font-bold mt-1 text-amber-700">
+                KES {Number(paymentSummary.totalOutstanding ?? 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">{paymentSummary.pendingCount ?? 0} pending</p>
+            </CardContent>
+          </Card>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Collection Rate</p>
+              <p className="text-xl font-bold mt-1 text-primary">
+                {paymentSummary.collectionRate ?? 0}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">this month</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Management Info */}
       <Card>

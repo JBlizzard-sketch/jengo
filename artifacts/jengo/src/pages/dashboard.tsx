@@ -16,7 +16,7 @@ import {
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building, Users, AlertCircle, CreditCard, Activity, PlusCircle, MessageSquare, Zap, UserPlus, CalendarClock } from "lucide-react";
+import { Building, Users, AlertCircle, CreditCard, Activity, PlusCircle, MessageSquare, Zap, UserPlus, CalendarClock, Home, TrendingDown } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
@@ -81,6 +81,15 @@ export default function Dashboard() {
   if (isLoadingSummary) {
     return <div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>;
   }
+
+  const totalUnits = (buildings ?? []).reduce((sum, b) => sum + (b.totalUnits ?? 0), 0);
+  const activeResidents = (allResidents ?? []).filter(r => r.status === "active").length;
+  const estimatedVacant = Math.max(0, totalUnits - activeResidents);
+  const buildingsWithCharge = (buildings ?? []).filter(b => b.serviceChargeAmount);
+  const avgCharge = buildingsWithCharge.length
+    ? buildingsWithCharge.reduce((s, b) => s + Number(b.serviceChargeAmount), 0) / buildingsWithCharge.length
+    : 0;
+  const vacancyRevenueLoss = estimatedVacant * avgCharge;
 
   const categoryData = (issuesSummary?.byCategory ?? [])
     .map(c => ({ name: c.category, value: c.count }))
@@ -255,6 +264,54 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Vacancy Widget */}
+      {totalUnits > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className={estimatedVacant > 0 ? "border-amber-200 bg-amber-50/30" : "border-green-200 bg-green-50/30"}>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className={`p-3 rounded-full ${estimatedVacant > 0 ? "bg-amber-100" : "bg-green-100"}`}>
+                <Home className={`w-5 h-5 ${estimatedVacant > 0 ? "text-amber-600" : "text-green-600"}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Estimated Vacant Units</p>
+                <p className={`text-2xl font-bold ${estimatedVacant > 0 ? "text-amber-700" : "text-green-700"}`}>
+                  {estimatedVacant} <span className="text-sm font-normal text-muted-foreground">/ {totalUnits}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{activeResidents} active residents</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className={vacancyRevenueLoss > 0 ? "border-red-200 bg-red-50/30" : "border-green-200 bg-green-50/30"}>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className={`p-3 rounded-full ${vacancyRevenueLoss > 0 ? "bg-red-100" : "bg-green-100"}`}>
+                <TrendingDown className={`w-5 h-5 ${vacancyRevenueLoss > 0 ? "text-red-600" : "text-green-600"}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Revenue Loss from Vacancies</p>
+                <p className={`text-2xl font-bold ${vacancyRevenueLoss > 0 ? "text-red-700" : "text-green-700"}`}>
+                  KES {vacancyRevenueLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">per month at avg charge</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-3 rounded-full bg-primary/10">
+                <Building className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Occupancy Rate</p>
+                <p className="text-2xl font-bold text-primary">
+                  {totalUnits > 0 ? Math.round((activeResidents / totalUnits) * 100) : 0}%
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">platform-wide</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Leases Expiring Soon */}
       {expiringResidents.length > 0 && (

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download, AlertOctagon, Search, Upload, X, CheckCircle2 } from "lucide-react";
+import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download, AlertOctagon, Search, Upload, X, CheckCircle2, MessageCircle, Copy } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -357,6 +357,135 @@ function CsvImportDialog({ payments, residents, onClose }: { payments: any[]; re
   );
 }
 
+function WhatsAppRemindersDialog({
+  payments,
+  residents,
+  buildings,
+  onClose,
+}: {
+  payments: any[];
+  residents: any[];
+  buildings: any[];
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState<number | "all" | null>(null);
+
+  const settings = (() => {
+    try {
+      const raw = localStorage.getItem("jengo_settings");
+      const d = { companyName: "Jengo Property Management", mpesaPaybill: "247247", mpesaAccountPrefix: "SRVCHRG" };
+      return raw ? { ...d, ...JSON.parse(raw) } : d;
+    } catch {
+      return { companyName: "Jengo Property Management", mpesaPaybill: "247247", mpesaAccountPrefix: "SRVCHRG" };
+    }
+  })();
+
+  const residentMap = Object.fromEntries(residents.map(r => [r.id, r]));
+  const duePmts = payments.filter(p => p.status === "overdue" || p.status === "pending");
+
+  const makeMsg = (p: any) => {
+    const res = residentMap[p.residentId];
+    const firstName = res?.firstName ?? "Resident";
+    const phone = res?.phone ?? "";
+    const amount = Number(p.amount).toLocaleString();
+    const month = p.month
+      ? new Date(p.month + "-01").toLocaleDateString("en-KE", { month: "long", year: "numeric" })
+      : "";
+    const digits = phone.replace(/\D/g, "").slice(-9);
+    const acct = `${settings.mpesaAccountPrefix}${digits}`;
+    return `Dear ${firstName}, your service charge of KES ${amount}${month ? ` for ${month}` : ""} is ${p.status === "overdue" ? "OVERDUE" : "due"}.\n\nPay via M-Pesa:\nPaybill: ${settings.mpesaPaybill}\nAccount: ${acct}\n\nThank you,\n${settings.companyName}`;
+  };
+
+  const copyOne = (p: any, idx: number) => {
+    navigator.clipboard.writeText(makeMsg(p));
+    setCopied(idx);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const copyAllNumbers = () => {
+    const phones = duePmts.map(p => residentMap[p.residentId]?.phone).filter(Boolean).join("\n");
+    navigator.clipboard.writeText(phones);
+    setCopied("all");
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-green-600" />
+            WhatsApp Reminders
+          </DialogTitle>
+        </DialogHeader>
+        {duePmts.length === 0 ? (
+          <div className="py-10 text-center text-muted-foreground">
+            <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+            <p>No outstanding payments — all clear!</p>
+          </div>
+        ) : (
+          <div className="space-y-4 overflow-y-auto flex-1">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {duePmts.length} resident{duePmts.length !== 1 ? "s" : ""} with outstanding charges
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50 text-xs"
+                onClick={copyAllNumbers}
+                data-testid="button-copy-all-numbers"
+              >
+                {copied === "all" ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                {copied === "all" ? "Copied!" : "Copy All Numbers"}
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {duePmts.map((p, idx) => {
+                const res = residentMap[p.residentId];
+                return (
+                  <div
+                    key={p.id}
+                    className={`p-3 rounded-lg border ${p.status === "overdue" ? "border-red-200 bg-red-50/40" : "border-amber-200 bg-amber-50/40"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">
+                          {res?.firstName} {res?.lastName}
+                          {res?.phone && <span className="ml-2 text-xs text-muted-foreground font-normal">{res.phone}</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          KES {Number(p.amount).toLocaleString()} ·{" "}
+                          <span className={p.status === "overdue" ? "text-red-600 font-medium" : "text-amber-600 font-medium"}>
+                            {p.status}
+                          </span>
+                        </p>
+                        <pre className="text-[11px] text-muted-foreground mt-2 bg-muted/60 p-2 rounded leading-relaxed whitespace-pre-wrap break-words font-sans">
+                          {makeMsg(p)}
+                        </pre>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={`shrink-0 gap-1.5 text-xs h-8 ${copied === idx ? "border-green-300 text-green-700" : "border-green-300 text-green-700 hover:bg-green-50"}`}
+                        onClick={() => copyOne(p, idx)}
+                        data-testid={`button-copy-whatsapp-${p.id}`}
+                      >
+                        {copied === idx ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        {copied === idx ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function exportCSV(payments: any[], buildings: any[]) {
   const buildingMap = Object.fromEntries((buildings ?? []).map(b => [b.id, b.name]));
   const rows = [
@@ -390,6 +519,7 @@ export default function Payments() {
   const [recordingPayment, setRecordingPayment] = useState<any>(null);
   const [generatingCharges, setGeneratingCharges] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
+  const [sendingReminders, setSendingReminders] = useState(false);
   const qc = useQueryClient();
   const updatePayment = useUpdatePayment();
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
@@ -433,6 +563,15 @@ export default function Payments() {
           >
             <Download className="w-4 h-4" />
             Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2 text-green-700 border-green-300 hover:bg-green-50"
+            onClick={() => setSendingReminders(true)}
+            data-testid="button-send-reminders"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Reminders
           </Button>
           <Button
             variant="outline"
@@ -645,6 +784,14 @@ export default function Payments() {
           payments={rawPayments ?? []}
           residents={residents ?? []}
           onClose={() => setImportingCsv(false)}
+        />
+      )}
+      {sendingReminders && (
+        <WhatsAppRemindersDialog
+          payments={rawPayments ?? []}
+          residents={residents ?? []}
+          buildings={buildings ?? []}
+          onClose={() => setSendingReminders(false)}
         />
       )}
     </div>
