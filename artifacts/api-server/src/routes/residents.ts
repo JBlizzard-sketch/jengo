@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { z } from "zod";
 import { db } from "@workspace/db";
-import { residentsTable } from "@workspace/db";
+import { residentsTable, unitsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { CreateResidentBody, UpdateResidentBody, ListResidentsQueryParams } from "@workspace/api-zod";
 
@@ -59,4 +60,41 @@ residentsRouter.patch("/:id", async (req, res) => {
   const [resident] = await db.update(residentsTable).set(updates).where(eq(residentsTable.id, id)).returning();
   if (!resident) return res.status(404).json({ message: "Not found" });
   return res.json(resident);
+});
+
+// POST /api/residents/:id/move-out — mark resident inactive + unit vacant
+residentsRouter.post("/:id/move-out", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    moveOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    depositHeld: z.coerce.number().min(0).default(0),
+    depositReturned: z.coerce.number().min(0).default(0),
+    conditionNotes: z.string().optional(),
+  }).parse(req.body);
+
+  const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, id));
+  if (!resident) { res.status(404).json({ error: "Resident not found" }); return; }
+  if (resident.status !== "active") { res.status(400).json({ error: "Resident is not active" }); return; }
+
+  const unitId = resident.unitId;
+
+  const [updated] = await db.update(residentsTable).set({
+    status: "inactive",
+    moveOutDate: body.moveOutDate,
+    unitId: null,
+  }).where(eq(residentsTable.id, id)).returning();
+
+  if (unitId) {
+    await db.update(unitsTable).set({ status: "vacant" }).where(eq(unitsTable.id, unitId));
+  }
+
+  res.json({
+    resident: updated,
+    unitId,
+    moveOutDate: body.moveOutDate,
+    depositHeld: body.depositHeld,
+    depositReturned: body.depositReturned,
+    depositDeduction: body.depositHeld - body.depositReturned,
+    conditionNotes: body.conditionNotes ?? null,
+  });
 });

@@ -14,9 +14,10 @@ import {
   getListResidentsQueryKey,
   getListBuildingsQueryKey,
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building, Users, AlertCircle, CreditCard, Activity, PlusCircle, MessageSquare, Zap, UserPlus, CalendarClock, Home, TrendingDown } from "lucide-react";
+import { Building, Users, AlertCircle, CreditCard, Activity, PlusCircle, MessageSquare, Zap, UserPlus, CalendarClock, Home, TrendingDown, AlertTriangle, Clock, BellRing, UserCheck } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
@@ -76,6 +77,16 @@ export default function Dashboard() {
 
   const { data: paymentSummary } = useGetPaymentsSummary(undefined, {
     query: { queryKey: getGetPaymentsSummaryQueryKey() }
+  });
+
+  const { data: alerts } = useQuery<{ openIssues: number; overduePayments: number; pendingVisitors: number; residentComments: number }>({
+    queryKey: ["dashboard", "alerts"],
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard/alerts");
+      if (!res.ok) throw new Error("Failed to fetch alerts");
+      return res.json();
+    },
+    refetchInterval: 60_000,
   });
 
   if (isLoadingSummary) {
@@ -140,6 +151,58 @@ export default function Dashboard() {
           icon={Users}
         />
       </div>
+
+      {/* Action Centre */}
+      {alerts && (alerts.overduePayments > 0 || alerts.pendingVisitors > 0 || alerts.openIssues > 0 || alerts.residentComments > 0) && (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm flex items-center gap-2 text-amber-900">
+              <BellRing className="w-4 h-4 text-amber-600" />
+              Needs Attention
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <div className="flex flex-wrap gap-2">
+              {alerts.overduePayments > 0 && (
+                <button
+                  onClick={() => setLocation("/payments?status=overdue")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-100 border border-red-200 hover:bg-red-200 transition-colors cursor-pointer"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                  <span className="text-xs font-semibold text-red-700">{alerts.overduePayments} Overdue Payment{alerts.overduePayments !== 1 ? "s" : ""}</span>
+                </button>
+              )}
+              {alerts.pendingVisitors > 0 && (
+                <button
+                  onClick={() => setLocation("/visitors")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 border border-amber-200 hover:bg-amber-200 transition-colors cursor-pointer"
+                >
+                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                  <span className="text-xs font-semibold text-amber-800">{alerts.pendingVisitors} Visitor{alerts.pendingVisitors !== 1 ? "s" : ""} Awaiting Approval</span>
+                </button>
+              )}
+              {alerts.openIssues > 0 && (
+                <button
+                  onClick={() => setLocation("/issues")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-100 border border-orange-200 hover:bg-orange-200 transition-colors cursor-pointer"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-orange-600" />
+                  <span className="text-xs font-semibold text-orange-700">{alerts.openIssues} Open Issue{alerts.openIssues !== 1 ? "s" : ""}</span>
+                </button>
+              )}
+              {alerts.residentComments > 0 && (
+                <button
+                  onClick={() => setLocation("/issues")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-100 border border-purple-200 hover:bg-purple-200 transition-colors cursor-pointer"
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-purple-600" />
+                  <span className="text-xs font-semibold text-purple-700">{alerts.residentComments} Resident Comment{alerts.residentComments !== 1 ? "s" : ""} (48h)</span>
+                </button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Actions */}
       <Card>
