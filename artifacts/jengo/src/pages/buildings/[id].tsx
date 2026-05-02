@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
-  useGetBuilding, useListUnits, useListResidents, useListIssues,
+  useGetBuilding, useListUnits, useListResidents, useListIssues, useCreateResident,
   getGetBuildingQueryKey, getListUnitsQueryKey, getListResidentsQueryKey, getListIssuesQueryKey
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building, Users, Phone, Star, AlertCircle, Home } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Building, Users, Phone, Home, UserPlus } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   occupied: "bg-green-100 text-green-700",
@@ -26,10 +32,102 @@ const RESIDENT_STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700",
 };
 
+function AddResidentDialog({ buildingId, units, onClose }: { buildingId: number; units: any[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const createResident = useCreateResident();
+  const [form, setForm] = useState({
+    firstName: "", lastName: "", phone: "", email: "",
+    unitId: "", moveInDate: new Date().toISOString().split("T")[0], isOwner: false,
+  });
+
+  const set = (k: string, v: string | boolean) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.firstName || !form.lastName || !form.phone || !form.unitId) return;
+    createResident.mutate(
+      {
+        data: {
+          buildingId,
+          unitId: Number(form.unitId),
+          firstName: form.firstName,
+          lastName: form.lastName,
+          phone: form.phone,
+          email: form.email || undefined,
+          moveInDate: form.moveInDate || undefined,
+          isOwner: form.isOwner,
+        }
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListResidentsQueryKey({ buildingId }) });
+          onClose();
+        }
+      }
+    );
+  };
+
+  const occupiedUnitIds = new Set<number>();
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Resident</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">First Name *</label>
+              <Input placeholder="Jane" value={form.firstName} onChange={e => set("firstName", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Last Name *</label>
+              <Input placeholder="Mwangi" value={form.lastName} onChange={e => set("lastName", e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Phone *</label>
+            <Input placeholder="0712 345 678" value={form.phone} onChange={e => set("phone", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Email</label>
+            <Input type="email" placeholder="jane@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Unit *</label>
+            <Select value={form.unitId} onValueChange={v => set("unitId", v)}>
+              <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
+              <SelectContent>
+                {units.map(u => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    Unit {u.unitNumber} {u.status !== "occupied" ? "" : " (occupied)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Move-in Date</label>
+            <Input type="date" value={form.moveInDate} onChange={e => set("moveInDate", e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="checkbox" checked={form.isOwner} onChange={e => set("isOwner", e.target.checked)} className="rounded" />
+            Owner-occupier
+          </label>
+          <Button type="submit" className="w-full" disabled={createResident.isPending || !form.firstName || !form.lastName || !form.phone || !form.unitId}>
+            {createResident.isPending ? "Adding..." : "Add Resident"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function BuildingDetail() {
   const [, params] = useRoute("/buildings/:id");
   const [, setLocation] = useLocation();
   const id = Number(params?.id);
+  const [addingResident, setAddingResident] = useState(false);
 
   const { data: building, isLoading } = useGetBuilding(id, { query: { queryKey: getGetBuildingQueryKey(id), enabled: !!id } });
   const { data: units } = useListUnits(id, { query: { queryKey: getListUnitsQueryKey(id), enabled: !!id } });
@@ -134,6 +232,7 @@ export default function BuildingDetail() {
         <TabsList>
           <TabsTrigger value="units" data-testid="tab-units">Units ({units?.length ?? 0})</TabsTrigger>
           <TabsTrigger value="residents" data-testid="tab-residents">Residents ({residents?.length ?? 0})</TabsTrigger>
+
           <TabsTrigger value="issues" data-testid="tab-issues">Issues ({issues?.length ?? 0})</TabsTrigger>
         </TabsList>
 
@@ -172,6 +271,11 @@ export default function BuildingDetail() {
         </TabsContent>
 
         <TabsContent value="residents" className="mt-4">
+          <div className="flex justify-end mb-3">
+            <Button size="sm" className="gap-2" onClick={() => setAddingResident(true)} data-testid="button-add-resident">
+              <UserPlus className="w-4 h-4" /> Add Resident
+            </Button>
+          </div>
           <Card>
             <CardContent className="p-0">
               {!residents?.length ? (
@@ -228,6 +332,14 @@ export default function BuildingDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {addingResident && (
+        <AddResidentDialog
+          buildingId={id}
+          units={units ?? []}
+          onClose={() => setAddingResident(false)}
+        />
+      )}
     </div>
   );
 }

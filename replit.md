@@ -65,11 +65,14 @@ All routes under `/api`:
 - `POST /api/auth/logout` — destroy session
 - `GET /api/auth/me` — return current resident session
 
-### Portal (resident-scoped, Phase 2)
+### Portal (resident-scoped, Phase 2 + 3)
 - `GET /api/portal/home` — dashboard data (unit, building, stats, recent issues/payments/announcements)
 - `GET /api/portal/issues` — resident's own issues
+- `GET /api/portal/issues/:id` — single issue + comments thread
 - `POST /api/portal/issues` — submit new issue
+- `POST /api/portal/issues/:id/comments` — resident adds comment to own issue
 - `GET /api/portal/payments` — resident's payments
+- `POST /api/portal/payments/:id/submit-mpesa` — submit M-Pesa ref for management verification
 - `GET /api/portal/announcements` — building announcements
 - `GET /api/portal/visitors` — resident's visitors
 - `POST /api/portal/visitors` — pre-clear a visitor

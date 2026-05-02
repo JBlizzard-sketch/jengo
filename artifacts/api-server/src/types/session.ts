@@ -7,5 +7,6 @@ declare module "express-session" {
     residentName?: string;
     buildingId?: number;
     unitId?: number;
+    gateAuthenticated?: boolean;
   }
 }

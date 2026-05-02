@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter } from "lucide-react";
+import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -99,6 +99,8 @@ export default function Payments() {
   const [selectedBuilding, setSelectedBuilding] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [recordingPayment, setRecordingPayment] = useState<any>(null);
+  const qc = useQueryClient();
+  const updatePayment = useUpdatePayment();
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
 
   const params: Record<string, unknown> = {};
@@ -223,10 +225,25 @@ export default function Payments() {
                       {payment.month && <span>{payment.month}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 ml-4">
+                  <div className="flex items-center gap-2 ml-4">
                     <p className="font-semibold text-foreground">KES {Number(payment.amount).toLocaleString()}</p>
-                    {(payment.status === "pending" || payment.status === "overdue") && (
-                      <Button size="sm" onClick={() => setRecordingPayment(payment)} data-testid={`button-record-${payment.id}`}>
+                    {payment.mpesaRef && payment.status !== "paid" && payment.status !== "waived" && (
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white gap-1"
+                        onClick={() => {
+                          updatePayment.mutate(
+                            { id: payment.id, data: { status: "paid", paymentMethod: "mpesa", paidDate: new Date().toISOString().split("T")[0], mpesaRef: payment.mpesaRef ?? undefined } },
+                            { onSuccess: () => { qc.invalidateQueries({ queryKey: getListPaymentsQueryKey() }); qc.invalidateQueries({ queryKey: getGetPaymentsSummaryQueryKey() }); } }
+                          );
+                        }}
+                        data-testid={`button-verify-${payment.id}`}
+                      >
+                        <BadgeCheck className="w-3.5 h-3.5" /> Verify
+                      </Button>
+                    )}
+                    {!payment.mpesaRef && (payment.status === "pending" || payment.status === "overdue") && (
+                      <Button size="sm" variant="outline" onClick={() => setRecordingPayment(payment)} data-testid={`button-record-${payment.id}`}>
                         Record
                       </Button>
                     )}

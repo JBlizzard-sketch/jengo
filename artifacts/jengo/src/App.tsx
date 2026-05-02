@@ -19,6 +19,7 @@ import Visitors from "@/pages/visitors";
 import Payments from "@/pages/payments";
 import Contractors from "@/pages/contractors";
 
+import GatePage from "@/pages/gate/index";
 import PortalLogin from "@/pages/portal/login";
 import PortalDashboard from "@/pages/portal/dashboard";
 import PortalIssues from "@/pages/portal/issues";
@@ -57,6 +58,9 @@ function PortalGuard({ component: Component }: { component: React.ComponentType 
 function Router() {
   return (
     <Switch>
+      {/* Gate security terminal */}
+      <Route path="/gate" component={GatePage} />
+
       {/* Resident Portal routes */}
       <Route path="/portal" component={PortalLogin} />
       <Route path="/portal/dashboard">

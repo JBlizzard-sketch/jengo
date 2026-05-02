@@ -11,12 +11,14 @@ import { contractorsRouter, jobsRouter } from "./contractors";
 import { dashboardRouter } from "./dashboard";
 import { authRouter } from "./auth";
 import { portalRouter } from "./portal";
+import { gateRouter } from "./gate";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
 router.use("/portal", portalRouter);
+router.use("/gate", gateRouter);
 router.use("/buildings", buildingsRouter);
 router.use("/", unitsRouter);
 router.use("/residents", residentsRouter);
