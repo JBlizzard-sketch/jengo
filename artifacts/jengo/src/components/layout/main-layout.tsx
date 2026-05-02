@@ -12,6 +12,7 @@ import {
   Menu,
   ExternalLink,
   Search,
+  BarChart2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -57,6 +58,7 @@ function SidebarNav({
     { href: "/announcements", label: "Announcements", icon: Megaphone, badge: 0 },
     { href: "/visitors", label: "Visitors", icon: Users, badge: alerts?.pendingVisitors ?? 0 },
     { href: "/payments", label: "Payments", icon: CreditCard, badge: alerts?.overduePayments ?? 0 },
+    { href: "/reports", label: "Reports", icon: BarChart2, badge: 0 },
     { href: "/contractors", label: "Contractors", icon: Wrench, badge: 0 },
   ];
 

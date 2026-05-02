@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download } from "lucide-react";
+import { TrendingUp, AlertTriangle, CreditCard, CheckCircle, Filter, BadgeCheck, Zap, Download, AlertOctagon } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -277,6 +277,21 @@ export default function Payments() {
           >
             <Download className="w-4 h-4" />
             Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2 border-red-200 text-red-700 hover:bg-red-50"
+            onClick={async () => {
+              const res = await fetch("/api/payments/mark-overdue", { method: "POST" });
+              const data = await res.json();
+              qc.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+              qc.invalidateQueries({ queryKey: getGetPaymentsSummaryQueryKey() });
+              alert(`Marked ${data.marked} payment${data.marked !== 1 ? "s" : ""} as overdue.`);
+            }}
+            data-testid="button-mark-overdue"
+          >
+            <AlertOctagon className="w-4 h-4" />
+            Mark Overdue
           </Button>
           <Button className="gap-2" onClick={() => setGeneratingCharges(true)} data-testid="button-generate-charges">
             <Zap className="w-4 h-4" />

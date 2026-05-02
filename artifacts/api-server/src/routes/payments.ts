@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { paymentsTable, residentsTable, buildingsTable } from "@workspace/db";
-import { eq, and, sum, count } from "drizzle-orm";
+import { eq, and, sum, count, lt } from "drizzle-orm";
 import { z } from "zod";
 import {
   CreatePaymentBody, UpdatePaymentBody,
@@ -60,6 +60,49 @@ paymentsRouter.post("/", async (req, res) => {
     status: "pending",
   }).returning();
   res.status(201).json({ ...payment, amount: Number(payment.amount), currency: payment.currency ?? "KES" });
+});
+
+// POST /api/payments/mark-overdue — mark all pending past-due payments as overdue
+paymentsRouter.post("/mark-overdue", async (req, res) => {
+  const today = new Date().toISOString().split("T")[0];
+  const updated = await db
+    .update(paymentsTable)
+    .set({ status: "overdue" })
+    .where(and(eq(paymentsTable.status, "pending"), lt(paymentsTable.dueDate, today)))
+    .returning();
+  res.json({ marked: updated.length, date: today });
+});
+
+// GET /api/payments/report — per-building collection summary, optionally filtered by month
+paymentsRouter.get("/report", async (req, res) => {
+  const month = typeof req.query.month === "string" ? req.query.month : undefined;
+  const allPayments = month
+    ? await db.select().from(paymentsTable).where(eq(paymentsTable.month, month))
+    : await db.select().from(paymentsTable);
+  const buildings = await db.select().from(buildingsTable).orderBy(buildingsTable.name);
+
+  const report = buildings.map(b => {
+    const bPayments = allPayments.filter(p => p.buildingId === b.id);
+    const collected = bPayments.filter(p => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
+    const overdue = bPayments.filter(p => p.status === "overdue").reduce((s, p) => s + Number(p.amount), 0);
+    const pending = bPayments.filter(p => p.status === "pending").reduce((s, p) => s + Number(p.amount), 0);
+    const total = collected + overdue + pending;
+    return {
+      buildingId: b.id,
+      buildingName: b.name,
+      neighbourhood: b.neighbourhood,
+      collected,
+      overdue,
+      pending,
+      total,
+      collectionRate: total > 0 ? Math.round((collected / total) * 100) : 0,
+      paidCount: bPayments.filter(p => p.status === "paid").length,
+      overdueCount: bPayments.filter(p => p.status === "overdue").length,
+      pendingCount: bPayments.filter(p => p.status === "pending").length,
+    };
+  });
+
+  res.json({ month: month ?? "all", buildings: report });
 });
 
 paymentsRouter.get("/:id", async (req, res) => {

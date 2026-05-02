@@ -19,6 +19,7 @@ import Visitors from "@/pages/visitors";
 import Payments from "@/pages/payments";
 import Contractors from "@/pages/contractors";
 import Residents from "@/pages/residents/index";
+import Reports from "@/pages/reports";
 
 import GatePage from "@/pages/gate/index";
 import PortalLogin from "@/pages/portal/login";
@@ -98,6 +99,7 @@ function Router() {
               <Route path="/announcements" component={Announcements} />
               <Route path="/visitors" component={Visitors} />
               <Route path="/payments" component={Payments} />
+              <Route path="/reports" component={Reports} />
               <Route path="/contractors" component={Contractors} />
               <Route component={NotFound} />
             </Switch>

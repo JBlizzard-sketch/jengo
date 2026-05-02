@@ -65,6 +65,13 @@ All routes under `/api`:
 - `POST /api/auth/logout` — destroy session
 - `GET /api/auth/me` — return current resident session
 
+### Resident Management & Exports (Phase 7)
+- New `/residents` page in sidebar — all residents across every building in one view
+- Search by name, phone, or email; filter by building and status
+- Summary cards: Active / Pending / Moved Out counts
+- "Move Out" action per resident → confirmation dialog → sets status to inactive, excluded from future bulk charges
+- Payments page — "Export CSV" button downloads filtered payment records as a properly escaped CSV (month, description, amount, status, due date, paid date, method, M-Pesa ref, building)
+
 ### Platform Administration (Phase 6)
 - Buildings list — "Add Building" button opens full creation dialog (name, address, neighbourhood, units, service charge, caretaker)
 - Building Detail — "Edit" button opens edit dialog (update name, address, caretaker, service charge)

@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
-  useGetIssue, useUpdateIssue, useListIssueComments, useAddIssueComment, useListContractors,
-  getGetIssueQueryKey, getListIssueCommentsQueryKey, getListContractorsQueryKey
+  useGetIssue, useUpdateIssue, useListIssueComments, useAddIssueComment, useListContractors, useCreateJob,
+  getGetIssueQueryKey, getListIssueCommentsQueryKey, getListContractorsQueryKey, getListJobsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, CheckCircle, Clock, Wrench, Paperclip, MessageSquare } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, CheckCircle, Clock, Wrench, Paperclip, MessageSquare, HardHat } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-red-100 text-red-700 border-red-200",
@@ -48,6 +50,12 @@ export default function IssueDetail() {
   const [authorName, setAuthorName] = useState("Management");
   const [authorRole, setAuthorRole] = useState<string>("management");
   const [resolutionNote, setResolutionNote] = useState("");
+  const [creatingJob, setCreatingJob] = useState(false);
+  const [jobTitle, setJobTitle] = useState("");
+  const [jobContractorId, setJobContractorId] = useState<string>("");
+  const [jobAmount, setJobAmount] = useState("");
+  const [jobDate, setJobDate] = useState("");
+  const createJob = useCreateJob();
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
   if (!issue) return <div className="p-8 text-center text-muted-foreground">Issue not found</div>;
@@ -56,6 +64,33 @@ export default function IssueDetail() {
     updateIssue.mutate(
       { id, data: { status: newStatus as any, resolutionNote: newStatus === "resolved" ? resolutionNote : undefined } },
       { onSuccess: () => qc.invalidateQueries({ queryKey: getGetIssueQueryKey(id) }) }
+    );
+  };
+
+  const handleCreateJob = () => {
+    if (!jobTitle.trim() || !jobContractorId) return;
+    const contractor = contractors?.find(c => String(c.id) === jobContractorId);
+    createJob.mutate(
+      {
+        data: {
+          buildingId: issue.buildingId,
+          contractorId: Number(jobContractorId),
+          title: jobTitle,
+          description: `Work order linked to issue #${issue.id}: ${issue.title}`,
+          quotedAmount: jobAmount ? Number(jobAmount) : undefined,
+          scheduledDate: jobDate || undefined,
+        }
+      },
+      {
+        onSuccess: () => {
+          setCreatingJob(false);
+          setJobTitle("");
+          setJobContractorId("");
+          setJobAmount("");
+          setJobDate("");
+          qc.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        }
+      }
     );
   };
 
@@ -177,6 +212,68 @@ export default function IssueDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* Create Work Order */}
+      {issue.status !== "closed" && (
+        <Card className="border-amber-200">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <HardHat className="w-4 h-4 text-amber-600" />
+                Work Order
+              </CardTitle>
+              <Button size="sm" variant="outline" className="gap-1 text-amber-700 border-amber-200 hover:bg-amber-50" onClick={() => { setJobTitle(issue.title); setCreatingJob(true); }} data-testid="button-create-work-order">
+                Create Work Order
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">Commission a contractor job directly from this issue</p>
+          </CardHeader>
+        </Card>
+      )}
+
+      {/* Work Order Dialog */}
+      <Dialog open={creatingJob} onOpenChange={setCreatingJob}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Work Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Job Title</label>
+              <Input value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="e.g. Fix broken pipe in corridor" data-testid="input-job-title" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Assign Contractor *</label>
+              <Select value={jobContractorId} onValueChange={setJobContractorId}>
+                <SelectTrigger data-testid="select-job-contractor">
+                  <SelectValue placeholder="Select contractor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contractors?.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.specialty ? ` — ${c.specialty}` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Quoted Amount (KES)</label>
+                <Input type="number" value={jobAmount} onChange={e => setJobAmount(e.target.value)} placeholder="Optional" data-testid="input-job-amount" />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Scheduled Date</label>
+                <Input type="date" value={jobDate} onChange={e => setJobDate(e.target.value)} data-testid="input-job-date" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setCreatingJob(false)}>Cancel</Button>
+              <Button onClick={handleCreateJob} disabled={createJob.isPending || !jobTitle.trim() || !jobContractorId} data-testid="button-confirm-work-order">
+                {createJob.isPending ? "Creating..." : "Create Work Order"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Comments */}
       <Card>
