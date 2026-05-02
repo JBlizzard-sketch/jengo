@@ -39,6 +39,8 @@ type FormData = z.infer<typeof schema>;
 
 function NewAnnouncementDialog({ buildingId }: { buildingId?: number }) {
   const [open, setOpen] = useState(false);
+  const [broadcast, setBroadcast] = useState(false);
+  const [broadcasting, setBroadcasting] = useState(false);
   const qc = useQueryClient();
   const createAnnouncement = useCreateAnnouncement();
   const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
@@ -48,21 +50,41 @@ function NewAnnouncementDialog({ buildingId }: { buildingId?: number }) {
     defaultValues: { title: "", content: "", category: "general", isPinned: false, authorName: "Management", buildingId: buildingId ?? 0 },
   });
 
-  const onSubmit = (data: FormData) => {
-    createAnnouncement.mutate(
-      { data: data as any },
-      {
-        onSuccess: () => {
-          qc.invalidateQueries({ queryKey: getListAnnouncementsQueryKey() });
-          setOpen(false);
-          form.reset();
+  const onSubmit = async (data: FormData) => {
+    if (broadcast && buildings && buildings.length > 0) {
+      setBroadcasting(true);
+      try {
+        for (const b of buildings) {
+          await new Promise<void>((resolve, reject) => {
+            createAnnouncement.mutate(
+              { data: { ...data, buildingId: b.id } as any },
+              { onSuccess: () => resolve(), onError: reject }
+            );
+          });
         }
+        qc.invalidateQueries({ queryKey: getListAnnouncementsQueryKey() });
+        setOpen(false);
+        setBroadcast(false);
+        form.reset();
+      } finally {
+        setBroadcasting(false);
       }
-    );
+    } else {
+      createAnnouncement.mutate(
+        { data: data as any },
+        {
+          onSuccess: () => {
+            qc.invalidateQueries({ queryKey: getListAnnouncementsQueryKey() });
+            setOpen(false);
+            form.reset();
+          }
+        }
+      );
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setBroadcast(false); form.reset(); } }}>
       <DialogTrigger asChild>
         <Button className="gap-2" data-testid="button-new-announcement">
           <Plus className="w-4 h-4" />
@@ -75,20 +97,36 @@ function NewAnnouncementDialog({ buildingId }: { buildingId?: number }) {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField control={form.control} name="buildingId" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Building</FormLabel>
-                <Select onValueChange={v => field.onChange(Number(v))} value={field.value ? String(field.value) : ""}>
-                  <FormControl>
-                    <SelectTrigger data-testid="select-building"><SelectValue placeholder="Select building" /></SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {buildings?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )} />
+            {/* Broadcast toggle */}
+            <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/40">
+              <div>
+                <p className="text-sm font-medium">Broadcast to all buildings</p>
+                <p className="text-xs text-muted-foreground">Post to all {buildings?.length ?? 0} buildings at once</p>
+              </div>
+              <Switch
+                checked={broadcast}
+                onCheckedChange={setBroadcast}
+                data-testid="switch-broadcast"
+              />
+            </div>
+
+            {!broadcast && (
+              <FormField control={form.control} name="buildingId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Building</FormLabel>
+                  <Select onValueChange={v => field.onChange(Number(v))} value={field.value ? String(field.value) : ""}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-building"><SelectValue placeholder="Select building" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {buildings?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
             <FormField control={form.control} name="title" render={({ field }) => (
               <FormItem>
                 <FormLabel>Title</FormLabel>
@@ -134,8 +172,19 @@ function NewAnnouncementDialog({ buildingId }: { buildingId?: number }) {
                 <FormLabel className="!mt-0">Pin to top</FormLabel>
               </FormItem>
             )} />
-            <Button type="submit" disabled={createAnnouncement.isPending} className="w-full" data-testid="button-submit">
-              {createAnnouncement.isPending ? "Posting..." : "Post Announcement"}
+            <Button
+              type="submit"
+              disabled={createAnnouncement.isPending || broadcasting}
+              className="w-full"
+              data-testid="button-submit"
+            >
+              {broadcasting
+                ? "Broadcasting…"
+                : createAnnouncement.isPending
+                  ? "Posting…"
+                  : broadcast
+                    ? `Broadcast to all ${buildings?.length ?? ""} buildings`
+                    : "Post Announcement"}
             </Button>
           </form>
         </Form>

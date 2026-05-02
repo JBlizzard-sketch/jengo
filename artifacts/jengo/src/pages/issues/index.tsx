@@ -1,13 +1,14 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import {
-  useListIssues, useGetIssuesSummary,
-  getListIssuesQueryKey, getGetIssuesSummaryQueryKey
+  useListIssues, useGetIssuesSummary, useListBuildings,
+  getListIssuesQueryKey, getGetIssuesSummaryQueryKey, getListBuildingsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Plus, ChevronRight, Filter, Clock, ArrowUpDown } from "lucide-react";
+import { AlertCircle, Plus, ChevronRight, Filter, Clock, ArrowUpDown, Search } from "lucide-react";
 
 function issueAgeLabel(createdAt: string): string {
   const hours = (Date.now() - new Date(createdAt).getTime()) / 3600000;
@@ -45,12 +46,22 @@ export default function Issues() {
   const [status, setStatus] = useState<string>("all");
   const [category, setCategory] = useState<string>("all");
   const [priority, setPriority] = useState<string>("all");
+  const [buildingFilter, setBuildingFilter] = useState<string>("all");
+  const [textSearch, setTextSearch] = useState("");
   const [sortOldest, setSortOldest] = useState(false);
+
+  const { data: buildings } = useListBuildings({ query: { queryKey: getListBuildingsQueryKey() } });
+  const buildingMap = useMemo(() => {
+    const m: Record<number, string> = {};
+    buildings?.forEach(b => { m[b.id] = b.name; });
+    return m;
+  }, [buildings]);
 
   const params: Record<string, string> = {};
   if (status !== "all") params.status = status;
   if (category !== "all") params.category = category;
   if (priority !== "all") params.priority = priority;
+  if (buildingFilter !== "all") params.buildingId = buildingFilter;
 
   const { data: rawIssues, isLoading } = useListIssues(
     Object.keys(params).length ? params : undefined,
@@ -63,12 +74,16 @@ export default function Issues() {
 
   const issues = useMemo(() => {
     if (!rawIssues) return [];
-    const sorted = [...rawIssues].sort((a, b) => {
+    const q = textSearch.trim().toLowerCase();
+    const filtered = q
+      ? rawIssues.filter(i => i.title.toLowerCase().includes(q) || (i.description ?? "").toLowerCase().includes(q))
+      : rawIssues;
+    const sorted = [...filtered].sort((a, b) => {
       const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       return sortOldest ? diff : -diff;
     });
     return sorted;
-  }, [rawIssues, sortOldest]);
+  }, [rawIssues, sortOldest, textSearch]);
 
   const slaBreachCount = useMemo(() => (rawIssues ?? []).filter(isSLABreached).length, [rawIssues]);
 
@@ -106,55 +121,76 @@ export default function Issues() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <Filter className="w-4 h-4 text-muted-foreground" />
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-36" data-testid="select-status">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="w-36" data-testid="select-category">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {Object.entries(CATEGORY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={priority} onValueChange={setPriority}>
-          <SelectTrigger className="w-36" data-testid="select-priority">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="urgent">Urgent</SelectItem>
-          </SelectContent>
-        </Select>
-        {(status !== "all" || category !== "all" || priority !== "all") && (
-          <Button variant="ghost" size="sm" onClick={() => { setStatus("all"); setCategory("all"); setPriority("all"); }}>
-            Clear
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search issues by title or description…"
+            value={textSearch}
+            onChange={e => setTextSearch(e.target.value)}
+            data-testid="input-search"
+          />
+        </div>
+        <div className="flex flex-wrap gap-3 items-center">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <Select value={buildingFilter} onValueChange={setBuildingFilter}>
+            <SelectTrigger className="w-44" data-testid="select-building">
+              <SelectValue placeholder="All Buildings" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Buildings</SelectItem>
+              {buildings?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-36" data-testid="select-status">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="open">Open</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="resolved">Resolved</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="w-36" data-testid="select-category">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {Object.entries(CATEGORY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={priority} onValueChange={setPriority}>
+            <SelectTrigger className="w-36" data-testid="select-priority">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="urgent">Urgent</SelectItem>
+            </SelectContent>
+          </Select>
+          {(buildingFilter !== "all" || status !== "all" || category !== "all" || priority !== "all" || textSearch) && (
+            <Button variant="ghost" size="sm" onClick={() => { setStatus("all"); setCategory("all"); setPriority("all"); setBuildingFilter("all"); setTextSearch(""); }}>
+              Clear all
+            </Button>
+          )}
+          <Button
+            variant={sortOldest ? "secondary" : "ghost"}
+            size="sm"
+            className="gap-1 ml-auto"
+            onClick={() => setSortOldest(v => !v)}
+          >
+            <ArrowUpDown className="w-3.5 h-3.5" />
+            {sortOldest ? "Oldest first" : "Newest first"}
           </Button>
-        )}
-        <Button
-          variant={sortOldest ? "secondary" : "ghost"}
-          size="sm"
-          className="gap-1 ml-auto"
-          onClick={() => setSortOldest(v => !v)}
-        >
-          <ArrowUpDown className="w-3.5 h-3.5" />
-          {sortOldest ? "Oldest first" : "Newest first"}
-        </Button>
+        </div>
       </div>
 
       {/* Issues list */}
@@ -185,9 +221,16 @@ export default function Issues() {
                         </span>
                       </div>
                       <p className="font-medium text-foreground truncate">{issue.title}</p>
-                      {issue.assignedTo && (
-                        <p className="text-xs text-muted-foreground mt-0.5">Assigned to: {issue.assignedTo}</p>
-                      )}
+                      <div className="flex flex-wrap gap-2 mt-0.5">
+                        {buildingMap[issue.buildingId] && (
+                          <span className="text-xs text-muted-foreground">
+                            {buildingMap[issue.buildingId]}
+                          </span>
+                        )}
+                        {issue.assignedTo && (
+                          <span className="text-xs text-muted-foreground">· Assigned: {issue.assignedTo}</span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 ml-4 shrink-0">
                       {isSLABreached(issue) && (
