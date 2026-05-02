@@ -7,3 +7,4 @@ export * from "./visitors";
 export * from "./payments";
 export * from "./contractors";
 export * from "./expenses";
+export * from "./parking";

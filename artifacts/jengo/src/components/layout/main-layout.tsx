@@ -15,6 +15,7 @@ import {
   BarChart2,
   Settings,
   Receipt,
+  ParkingCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -62,6 +63,7 @@ function SidebarNav({
     { href: "/payments", label: "Payments", icon: CreditCard, badge: alerts?.overduePayments ?? 0 },
     { href: "/reports", label: "Reports", icon: BarChart2, badge: 0 },
     { href: "/expenses", label: "Expenses", icon: Receipt, badge: 0 },
+    { href: "/parking", label: "Parking", icon: ParkingCircle, badge: 0 },
     { href: "/contractors", label: "Contractors", icon: Wrench, badge: 0 },
     { href: "/settings", label: "Settings", icon: Settings, badge: 0 },
   ];
