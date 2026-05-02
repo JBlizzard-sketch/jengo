@@ -26,6 +26,7 @@ import UnitLedger from "@/pages/buildings/unit-ledger";
 import Settings from "@/pages/settings";
 import Expenses from "@/pages/expenses";
 import Parking from "@/pages/parking";
+import MaintenanceSchedule from "@/pages/maintenance-schedule";
 
 import GatePage from "@/pages/gate/index";
 import PortalLogin from "@/pages/portal/login";
@@ -114,6 +115,7 @@ function Router() {
               <Route path="/reports" component={Reports} />
               <Route path="/expenses" component={Expenses} />
               <Route path="/parking" component={Parking} />
+              <Route path="/maintenance" component={MaintenanceSchedule} />
               <Route path="/settings" component={Settings} />
               <Route path="/contractors/jobs/:id" component={JobDetail} />
               <Route path="/contractors" component={Contractors} />

@@ -14,6 +14,7 @@ import { portalRouter } from "./portal";
 import { gateRouter } from "./gate";
 import { expensesRouter } from "./expenses";
 import { parkingRouter } from "./parking";
+import { maintenanceRouter } from "./maintenance";
 
 const router: IRouter = Router();
 
@@ -33,5 +34,6 @@ router.use("/jobs", jobsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/expenses", expensesRouter);
 router.use("/parking", parkingRouter);
+router.use("/maintenance", maintenanceRouter);
 
 export default router;
